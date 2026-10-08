@@ -31,6 +31,10 @@ model User {
 
   isEmailVerified Boolean @default(false)
 
+
+  //Email verification tokenHash
+  emailVerificationTokens EmailVerificationToken[]
+
   // -- Reverse relations: what this user IS --------------------------------
   student           Student?
   supervisorProfile Supervisor?
