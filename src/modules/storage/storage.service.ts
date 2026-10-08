@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { FileFormat } from "../generated/prisma/client.js";
-import { supabase, DOCUMENTS_BUCKET } from "../lib/supabase.js";
-import { checkUploadedFile } from "../lib/file-signature.js";
-
+import type { FileFormat } from "../../generated/prisma/client.js";
+import { supabase, DOCUMENTS_BUCKET } from "../../lib/supabase.js";
+import { checkUploadedFile } from "../../lib/file-signature.js";
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "application/msword",

@@ -1,6 +1,6 @@
-import type { Student, Prisma } from "../generated/prisma/client.js";
-import { Gender, PlacementStatus } from "../generated/prisma/client.js";
-import { prisma } from "../lib/prisma.js";
+import type { Student, Prisma } from "../../generated/prisma/client.js";
+import { Gender, PlacementStatus } from "../../generated/prisma/client.js";
+import { prisma } from "../../lib/prisma.js";
 
 export async function createStudent(
   data: Prisma.StudentCreateInput

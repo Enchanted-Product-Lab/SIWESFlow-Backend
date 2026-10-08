@@ -1,20 +1,21 @@
-import type { Document, DocumentType } from "../generated/prisma/client.js";
-import { prisma } from "../lib/prisma.js";
-import { badRequest, forbidden, notFound } from "../lib/http-error.js";
-import { loadActor } from "../modules/access/actor.js";
-import { studentRelation } from "../modules/access/relations.js";
+import type { Document, DocumentType } from "../../generated/prisma/client.js";
+import { prisma } from "../../lib/prisma.js";
+import { badRequest, forbidden, notFound } from "../../lib/http-error.js";
+import { loadActor } from "../access/actor.js";
+import { studentRelation } from "../access/relations.js";
 import {
   canDeleteDocument,
   canReadDocument,
   canUploadDocument,
   OWNER_TYPES,
   type OwnerType,
-} from "../modules/access/document-policy.js";
+} from "../access/document-policy.js";
+
 import {
   uploadDocumentFile,
   getSignedDocumentUrl,
   deleteDocumentFile,
-} from "./storage.service.js";
+} from "../storage/storage.service.js";
 
 export type { OwnerType };
 
