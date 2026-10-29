@@ -20,7 +20,7 @@ const app = express();
 
 app.use(express.json({ limit: "10kb" }));
 
-// Authentication
+// Authentication routes
 app.use("/api/auth", authRouter);
 
 // Health check
@@ -28,7 +28,7 @@ app.get("/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ status: "ok", db: "connected" });
-  } catch (err) {
+  } catch (_err) {
     res.status(503).json({ status: "error", db: "unreachable" });
   }
 });

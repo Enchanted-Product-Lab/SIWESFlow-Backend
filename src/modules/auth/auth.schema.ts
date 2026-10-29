@@ -15,6 +15,12 @@ export const registerSchema = z.object({
     ),
 });
 
+export const loginSchema = z.object({
+  email: emailField,
+  // No policy rules at login: they'd reveal the policy and lock out older accounts.
+  // The max length stops oversized inputs.
+  password: z.string().min(1).max(128),
+});
 
 export const verifyEmailSchema = z.object({
   token: z.string().min(32).max(256),
@@ -27,3 +33,4 @@ export const resendVerificationSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
