@@ -13,7 +13,6 @@ import { errorHandler } from "./middlewares/errorhandlers.js";
 
 const app = express();
 
-app.use(express.json());
 app.use(express.json({ limit: "10kb" }));
 app.use("/api/auth", authRouter);
 
@@ -28,9 +27,7 @@ app.get("/health", async (_req, res) => {
 
 app.use("/documents", documentRouter);
 
-
-
-
 app.use(errorHandler)
 
 export default app;
+

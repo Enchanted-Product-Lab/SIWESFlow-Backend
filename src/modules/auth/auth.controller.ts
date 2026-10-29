@@ -1,8 +1,14 @@
 import type { Request, Response } from "express";
-import { registerSchema, resendVerificationSchema, verifyEmailSchema } from "./auth.schema.js";
-import { registerUser } from "./auth.service.js";
+import {
+  loginSchema,
+  registerSchema,
+  resendVerificationSchema,
+  verifyEmailSchema,
+} from "./auth.schema.js";
+import { loginUser, registerUser } from "./auth.service.js";
 import { resendVerificationEmail, verifyEmailToken } from "../auth/email verification service/verification.service.js";
-
+import { REFRESH_COOKIE_NAME, refreshCookieOptions } from "./auth.cookies.js";
+import { ACCESS_TOKEN_TTL_SECONDS } from "../auth/token service/token.service.js";
 export async function register(req: Request, res: Response) {
   const parsed = registerSchema.safeParse(req.body);
 
@@ -49,5 +55,32 @@ export async function resendVerification(req: Request, res: Response) {
 
   return res.status(202).json({
     message: "If this email belongs to an unverified account, a new verification email has been sent.",
+  });
+}
+
+export async function login(req: Request, res: Response) {
+  const parsed = loginSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: parsed.error.flatten().fieldErrors,
+    });
+  }
+
+  const result = await loginUser(parsed.data);
+
+  if (!result.ok) {
+    if (result.reason === "EMAIL_NOT_VERIFIED") {
+      return res.status(403).json({ error: "Email not verified" });
+    }
+    return res.status(401).json({ error: "Invalid email or password" });
+  }
+
+  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, refreshCookieOptions);
+  return res.status(200).json({
+    accessToken: result.accessToken,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+    user: result.user,
   });
 }

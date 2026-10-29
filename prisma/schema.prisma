@@ -52,6 +52,11 @@ model User {
   verifiedSupervisors Supervisor[] @relation("SupervisorVerifiedBy")
   verifiedDocuments   Document[]   @relation("DocumentVerifiedBy")
 
+
+//Refresh_Tokens
+refreshTokens RefreshToken[]
+
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
