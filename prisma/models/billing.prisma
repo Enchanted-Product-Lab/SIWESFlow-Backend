@@ -1,0 +1,87 @@
+// Configurable pricing structure - pricing is NOT hard-coded
+model Plan {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  name              String
+  amountKobo        Int      // price in kobo (NGN)
+  currency          String   @default("NGN")
+  durationDays      Int
+  maxActivePlacements Int?
+  maxSlots          Int?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  subscriptions   Subscription[]
+  payments        Payment[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+enum SubscriptionStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Subscription {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId      String
+  plan        Plan     @relation(fields: [planId], references: [id])
+  status      SubscriptionStatus @default(PENDING_PAYMENT)
+  startDate   DateTime?
+  expiryDate  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payments      Payment[]
+
+  @@index([companyId])
+  @@index([planId])
+  @@index([status])
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subscriptionId  String?
+  subscription    Subscription? @relation(fields: [subscriptionId], references: [id])
+  planId          String
+  plan            Plan     @relation(fields: [planId], references: [id])
+  amountKobo      Int
+  method          PaymentMethod @default(BANK_TRANSFER)
+  reference       String   @unique
+  paymentDate     DateTime
+  proofDocumentId String?
+  proofDocument   Document?   @relation("PaymentProof", fields: [proofDocumentId], references: [id])
+  status          PaymentStatus @default(PENDING)
+  submittedById   String
+  submittedBy     User?       @relation("PaymentSubmittedBy", fields: [submittedById], references: [id])
+  verifiedById    String?
+  verifiedBy      User?       @relation("PaymentVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt      DateTime?
+  rejectionReason String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([planId])
+  @@index([reference])
+  @@index([status])
+}

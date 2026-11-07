@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import { listStoredObjects } from "./storage.service.js";
+import { listStoredObjects } from "../modules/storage/storage.service.js";
 import { auditDocumentRow, type IntegrityIssue, type IntegrityReport } from "./document-integrity.rules.js";
 
 // File, MIME and access integrity audit. Read-only: it reports, a human fixes.

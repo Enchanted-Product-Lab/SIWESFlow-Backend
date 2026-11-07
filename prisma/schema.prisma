@@ -54,6 +54,8 @@ model User {
   verifiedCompanies   Company[]    @relation("CompanyVerifiedBy")
   verifiedSupervisors Supervisor[] @relation("SupervisorVerifiedBy")
   verifiedDocuments   Document[]   @relation("DocumentVerifiedBy")
+  verifiedPayments    Payment[]    @relation("PaymentVerifiedBy")
+  submittedPayments   Payment[]    @relation("PaymentSubmittedBy")
 
 
 //Refresh_Tokens

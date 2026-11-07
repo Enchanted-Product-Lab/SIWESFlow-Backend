@@ -5,7 +5,7 @@ import { isUniqueViolation, skipTake, type Page } from "../../lib/pagination.js"
 import { stripUndefined } from "../../lib/object.js";
 import { isAdmin, loadActor } from "../access/actor.js";
 import { isSupervisedBy, supervisorRelation } from "../access/relations.js";
-import { deleteStoredFilesForOwner } from "../../services/document.service.js";
+import { deleteStoredFilesForOwner } from "../../modules/document/document.service.js";
 import type {
   CompleteSupervisorInput,
   InviteSupervisorInput,

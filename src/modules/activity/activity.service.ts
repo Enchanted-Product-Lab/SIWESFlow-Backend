@@ -8,6 +8,7 @@ import { studentRelation } from "../access/relations.js";
 import type {
   CreateActivityInput,
   ListActivitiesQuery,
+  ReviewActivityInput,
   UpdateActivityInput,
 } from "./activity.schema.js";
 import {
@@ -300,4 +301,42 @@ export async function deleteActivity(userId: string, activityId: string) {
   // One statement: a concurrent delete is a 404, not a Prisma error.
   const { count } = await prisma.activity.deleteMany({ where: { id: activityId } });
   if (count === 0) throw notFound("Activity not found");
+}
+
+export async function reviewActivity(
+  userId: string,
+  activityId: string,
+  input: ReviewActivityInput,
+) {
+  const actor = await loadActor(userId);
+  if (!actor.supervisorId) throw forbidden("Only a supervisor can review activities");
+
+  const { activity, relation } = await requireEntryAccess(userId, activityId);
+  if (relation !== "host") {
+    throw forbidden("You can only review activities of your assigned students");
+  }
+  if (activity.status !== "PENDING" && activity.status !== "NEEDS_REVISION") {
+    throw conflict(`A ${activity.status.toLowerCase()} activity cannot be reviewed again`);
+  }
+
+  // reviewedById points at the Supervisor row, not the User row.
+  const { count } = await prisma.activity.updateMany({
+    where: { id: activityId, status: activity.status },
+    data: stripUndefined({
+      status: input.status,
+      reviewedById: actor.supervisorId,
+      reviewedAt: new Date(),
+      comment: input.comment,
+      rating: input.rating,
+    }),
+  });
+  if (count === 0) throw conflict("This entry was already reviewed");
+
+  return prisma.activity.findUniqueOrThrow({
+    where: { id: activityId },
+    include: {
+      student: { select: STUDENT_SUMMARY },
+      reviewedBy: { select: { id: true, fullName: true } },
+    },
+  });
 }

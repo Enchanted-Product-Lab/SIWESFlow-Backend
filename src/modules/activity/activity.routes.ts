@@ -5,6 +5,7 @@ import {
   createActivitySchema,
   listActivitiesQuery,
   updateActivitySchema,
+  reviewActivitySchema,
 } from "./activity.schema.js";
 import {
   createActivity,
@@ -12,6 +13,7 @@ import {
   getActivity,
   listActivities,
   updateActivity,
+  reviewActivity,
 } from "./activity.service.js";
 
 export const activityRouter = Router();
@@ -43,3 +45,14 @@ activityRouter.delete("/:id", requireRole("PLATFORM_ADMIN"), async (req, res) =>
   await deleteActivity(currentUser(req).id, id);
   res.status(204).send();
 });
+
+// Supervisor review of an activity
+activityRouter.post(
+  "/:id/review",
+  requireRole("SUPERVISOR"),
+  async (req, res) => {
+    const { id } = idParam.parse(req.params);
+    const body = reviewActivitySchema.parse(req.body);
+    res.json(await reviewActivity(currentUser(req).id, id, body));
+  },
+);

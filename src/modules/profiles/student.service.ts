@@ -6,7 +6,7 @@ import { isUniqueViolation, skipTake, type Page } from "../../lib/pagination.js"
 import { stripUndefined } from "../../lib/object.js";
 import { isAdmin, loadActor, type Actor } from "../access/actor.js";
 import { studentRelation, type StudentRelation } from "../access/relations.js";
-import { deleteStoredFilesForOwner } from "../../services/document.service.js";
+import { deleteStoredFilesForOwner } from "../../modules/document/document.service.js";
 import type { CreateStudentInput, UpdateStudentInput } from "./student.schema.js";
 
 // Hosts (supervisor / company) see what they need to work with the student,
