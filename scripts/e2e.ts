@@ -8,6 +8,7 @@
 // Every assertion is a real HTTP call; nothing is mocked.
 import "dotenv/config";
 import assert from "node:assert/strict";
+import { SignJWT } from "jose";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:4000";
 const PASSWORD = "SiwesFlow2026!";
@@ -60,11 +61,29 @@ async function step(name: string, fn: () => Promise<void>) {
 const expect = (actual: number, expected: number, label: string) =>
   assert.equal(actual, expected, `${label}: expected ${expected}, got ${actual}`);
 
-async function login(email: string): Promise<string> {
+async function login(email: string, key?: string): Promise<string> {
   const res = await call("POST", "/api/auth/login", undefined, { email, password: PASSWORD });
   expect(res.status, 200, `login ${email}`);
   assert.ok(res.body.accessToken, `login ${email}: no accessToken`);
+  if (key && res.body.user?.id) userIds[key] = res.body.user.id;
   return res.body.accessToken as string;
+}
+
+const userIds: Record<string, string> = {};
+
+// Mints a token with the same claims as the real one but already expired, so
+// the 401 path is exercised without waiting 15 minutes.
+async function expiredToken(userId: string): Promise<string> {
+  const secret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET ?? "");
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({ role: "PLATFORM_ADMIN" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuer("siwesflow-api")
+    .setAudience("siwesflow-app")
+    .setIssuedAt(now - 3600)
+    .setExpirationTime(now - 60)
+    .sign(secret);
 }
 
 async function main() {
@@ -80,9 +99,11 @@ async function main() {
   });
 
   await step("every seeded role can log in", async () => {
-    tokens.admin = await login("admin@siwesflow.dev");
+    tokens.admin = await login("admin@siwesflow.dev", "admin");
     tokens.coordinator = await login("coordinator@siwesflow.dev");
     tokens.company = await login("company@siwesflow.dev");
+    tokens.pendingCompany = await login("pendingcompany@siwesflow.dev");
+    tokens.expiredCompany = await login("expiredcompany@siwesflow.dev");
     tokens.supervisor = await login("supervisor@siwesflow.dev");
     tokens.student = await login("student@siwesflow.dev");
     tokens.student2 = await login("student2@siwesflow.dev");
@@ -129,6 +150,32 @@ async function main() {
     assert.equal(res.body.filledSlots, 0);
     placementId = res.body.id;
     assert.ok(placementId, "no placement id returned");
+  });
+
+  await step("an unverified company cannot post placements", async () => {
+    const res = await call("POST", "/api/placements", tokens.pendingCompany, {
+      title: "Should never exist",
+      department: "Platform",
+      availableSlots: 1,
+      startDate,
+      endDate,
+      workMode: "REMOTE",
+    });
+    expect(res.status, 403, "unverified company gate");
+    assert.match(String(res.body.error), /verified/i);
+  });
+
+  await step("a company with an expired subscription cannot post placements", async () => {
+    const res = await call("POST", "/api/placements", tokens.expiredCompany, {
+      title: "Should never exist either",
+      department: "Platform",
+      availableSlots: 1,
+      startDate,
+      endDate,
+      workMode: "REMOTE",
+    });
+    expect(res.status, 403, "expired subscription gate");
+    assert.match(String(res.body.error), /subscription/i);
   });
 
   await step("students do not see an unapproved placement", async () => {
@@ -219,6 +266,44 @@ async function main() {
       tokens.company,
     );
     expect(res.status, 409, "overbook");
+  });
+
+  await step("two simultaneous accepts cannot oversell the last slot", async () => {
+    const created = await call("POST", "/api/placements", tokens.company, {
+      title: "Concurrency check placement",
+      department: "Platform",
+      availableSlots: 1,
+      startDate,
+      endDate,
+      workMode: "REMOTE",
+    });
+    expect(created.status, 201, "create race placement");
+    const racePlacementId = created.body.id;
+
+    const approved = await call(
+      "POST",
+      `/api/placements/${racePlacementId}/approval`,
+      tokens.coordinator,
+      { approvalStatus: "APPROVED" },
+    );
+    expect(approved.status, 200, "approve race placement");
+
+    const first = await call("POST", `/api/placements/${racePlacementId}/apply`, tokens.student, {});
+    const second = await call("POST", `/api/placements/${racePlacementId}/apply`, tokens.student2, {});
+    expect(first.status, 201, "race apply 1");
+    expect(second.status, 201, "race apply 2");
+
+    const [r1, r2] = await Promise.all([
+      call("POST", `/api/placements/applications/${first.body.id}/accept`, tokens.company),
+      call("POST", `/api/placements/applications/${second.body.id}/accept`, tokens.company),
+    ]);
+
+    const statuses = [r1.status, r2.status].sort((a, b) => a - b);
+    assert.deepEqual(statuses, [200, 409], `expected one 200 and one 409, got ${statuses.join(" and ")}`);
+
+    const after = await call("GET", `/api/placements/${racePlacementId}`, tokens.company);
+    expect(after.status, 200, "read race placement");
+    assert.equal(after.body.filledSlots, 1, "filledSlots drifted past the single slot");
   });
 
   let activityId = "";
@@ -364,6 +449,37 @@ async function main() {
       status: "VERIFIED",
     });
     expect(res.status, 409, "double verify");
+  });
+
+  await step("an expired token is rejected, and a fresh login works", async () => {
+    assert.ok(userIds.admin, "admin user id was not captured at login");
+    const stale = await expiredToken(userIds.admin);
+    expect((await call("GET", "/api/placements", stale)).status, 401, "expired token");
+
+    const fresh = await login("admin@siwesflow.dev");
+    expect((await call("GET", "/api/placements", fresh)).status, 200, "fresh token after re-login");
+  });
+
+  await step("mutations leave an audit trail only admins can read", async () => {
+    expect((await call("GET", "/api/admin/audit", tokens.company)).status, 403, "company reads audit");
+
+    const placementAudit = await call("GET", `/api/admin/audit?entityId=${placementId}`, tokens.admin);
+    expect(placementAudit.status, 200, "placement audit");
+    const placementActions = placementAudit.body.data.map((e: any) => e.action);
+    assert.ok(placementActions.includes("PLACEMENT_CREATED"), "PLACEMENT_CREATED missing");
+    assert.ok(placementActions.includes("PLACEMENT_APPROVED"), "PLACEMENT_APPROVED missing");
+
+    const activityAudit = await call("GET", `/api/admin/audit?entityId=${activityId}`, tokens.admin);
+    assert.ok(
+      activityAudit.body.data.some((e: any) => e.action === "ACTIVITY_REVIEWED"),
+      "ACTIVITY_REVIEWED missing",
+    );
+
+    const paymentAudit = await call("GET", `/api/admin/audit?entityId=${paymentId}`, tokens.admin);
+    assert.ok(
+      paymentAudit.body.data.some((e: any) => e.action === "PAYMENT_VERIFIED"),
+      "PAYMENT_VERIFIED missing",
+    );
   });
 
   console.log(`\n${passed} passed, ${failed} failed\n`);

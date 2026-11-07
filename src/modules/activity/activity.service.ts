@@ -1,5 +1,6 @@
 import type { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../lib/prisma.js";
+import { auditData } from "../../lib/audit.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/http-error.js";
 import { skipTake, type Page } from "../../lib/pagination.js";
 import { stripUndefined } from "../../lib/object.js";
@@ -320,23 +321,39 @@ export async function reviewActivity(
   }
 
   // reviewedById points at the Supervisor row, not the User row.
-  const { count } = await prisma.activity.updateMany({
-    where: { id: activityId, status: activity.status },
-    data: stripUndefined({
-      status: input.status,
-      reviewedById: actor.supervisorId,
-      reviewedAt: new Date(),
-      comment: input.comment,
-      rating: input.rating,
-    }),
-  });
-  if (count === 0) throw conflict("This entry was already reviewed");
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.activity.updateMany({
+      where: { id: activityId, status: activity.status },
+      data: stripUndefined({
+        status: input.status,
+        reviewedById: actor.supervisorId,
+        reviewedAt: new Date(),
+        comment: input.comment,
+        rating: input.rating,
+      }),
+    });
+    if (count === 0) throw conflict("This entry was already reviewed");
 
-  return prisma.activity.findUniqueOrThrow({
-    where: { id: activityId },
-    include: {
-      student: { select: STUDENT_SUMMARY },
-      reviewedBy: { select: { id: true, fullName: true } },
-    },
+    await tx.auditLog.create({
+      data: auditData({
+        actorId: actor.id,
+        action: "ACTIVITY_REVIEWED",
+        entityType: "Activity",
+        entityId: activityId,
+        metadata: {
+          studentId: activity.studentId,
+          status: input.status,
+          rating: input.rating ?? null,
+        },
+      }),
+    });
+
+    return tx.activity.findUniqueOrThrow({
+      where: { id: activityId },
+      include: {
+        student: { select: STUDENT_SUMMARY },
+        reviewedBy: { select: { id: true, fullName: true } },
+      },
+    });
   });
 }

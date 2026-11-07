@@ -5,6 +5,7 @@ import {
   requireRole,
 } from "../../middlewares/auth.js";
 import { idParam } from "../profiles/common.schema.js";
+import { paymentSubmitLimiter } from "../../middlewares/rate-limiters.js";
 import {
   createPlanSchema,
   listPlansQuery,
@@ -70,6 +71,7 @@ billingRouter.patch(
 billingRouter.post(
   "/payments",
   requireRole("COMPANY_ADMIN"),
+  paymentSubmitLimiter,
   async (req, res) => {
     const body = submitPaymentSchema.parse(req.body);
     res.status(201).json(await submitPayment(currentUser(req).id, body));

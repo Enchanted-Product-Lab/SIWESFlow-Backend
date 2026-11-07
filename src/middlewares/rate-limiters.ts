@@ -1,16 +1,30 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import type { Request } from "express";
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
-function createLimiter(limit: number) {
+function createLimiter(limit: number, keyGenerator?: (req: Request) => string) {
   return rateLimit({
     windowMs: FIFTEEN_MINUTES,
     limit,
     standardHeaders: "draft-7",
     legacyHeaders: false,
+    ...(keyGenerator ? { keyGenerator } : {}),
     message: { error: "Too many requests, please try again later" },
   });
 }
+
+// Authenticated writes are keyed by user, so a shared office or campus IP does
+// not lock out everybody behind it. Falls back to IP for safety.
+function byUserId(req: Request): string {
+  return req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req.ip ?? "");
+}
+
+// Placement posting and applying, payment submission and activity review.
+export const placementWriteLimiter = createLimiter(30, byUserId);
+export const applicationLimiter = createLimiter(20, byUserId);
+export const paymentSubmitLimiter = createLimiter(10, byUserId);
+export const activityReviewLimiter = createLimiter(60, byUserId);
 
 function emailFromBody(req: { body?: { email?: unknown } }, prefix: string): string {
   return `${prefix}:${String(req.body?.email ?? "").trim().toLowerCase()}`;

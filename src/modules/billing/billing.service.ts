@@ -4,6 +4,7 @@ import {
   SubscriptionStatus,
 } from "../../generated/prisma/client.js";
 import { prisma } from "../../lib/prisma.js";
+import { auditData } from "../../lib/audit.js";
 import { conflict, forbidden, notFound } from "../../lib/http-error.js";
 import { isUniqueViolation, skipTake, type Page } from "../../lib/pagination.js";
 import { stripUndefined } from "../../lib/object.js";
@@ -240,6 +241,25 @@ export async function verifyPayment(
         data: { subscriptionId },
       });
     }
+
+    await tx.auditLog.create({
+      data: auditData({
+        actorId: actor.id,
+        action:
+          input.status === PaymentStatus.VERIFIED ? "PAYMENT_VERIFIED" : "PAYMENT_REJECTED",
+        entityType: "Payment",
+        entityId: paymentId,
+        metadata: {
+          companyId: payment.companyId,
+          planId: payment.planId,
+          amountKobo: payment.amountKobo,
+          status: input.status,
+          ...(input.status === PaymentStatus.REJECTED
+            ? { rejectionReason: input.rejectionReason ?? null }
+            : {}),
+        },
+      }),
+    });
 
     return tx.payment.findUniqueOrThrow({
       where: { id: paymentId },

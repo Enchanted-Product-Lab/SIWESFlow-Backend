@@ -12,6 +12,7 @@ const PASSWORD = "SiwesFlow2026!";
 
 async function wipe() {
   // Dependency order; FKs cascade where they can.
+  await prisma.auditLog.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.subscription.deleteMany();
   await prisma.plan.deleteMany();
@@ -42,6 +43,8 @@ async function main() {
   const adminUser = await user("admin@siwesflow.dev", "PLATFORM_ADMIN");
   const coordinatorUser = await user("coordinator@siwesflow.dev", "SCHOOL_COORDINATOR");
   const companyUser = await user("company@siwesflow.dev", "COMPANY_ADMIN");
+  const pendingCompanyUser = await user("pendingcompany@siwesflow.dev", "COMPANY_ADMIN");
+  const expiredCompanyUser = await user("expiredcompany@siwesflow.dev", "COMPANY_ADMIN");
   const supervisorUser = await user("supervisor@siwesflow.dev", "SUPERVISOR");
   const studentUser = await user("student@siwesflow.dev", "STUDENT");
   const student2User = await user("student2@siwesflow.dev", "STUDENT");
@@ -83,6 +86,42 @@ async function main() {
       email: "siwes@paystack.dev",
       phone: "+2348098765432",
       ownerUserId: companyUser.id,
+      verificationStatus: "VERIFIED",
+      verifiedById: adminUser.id,
+      verifiedAt: new Date(),
+    },
+  });
+
+  // A second company that has not been verified and has no subscription. It
+  // exists so the posting gate can be exercised end to end.
+  const pendingCompany = await prisma.company.create({
+    data: {
+      companyCode: "UNVERIFIED_CO",
+      name: "Unverified Co",
+      industry: "Consulting",
+      address: "12 Marina Road",
+      state: "Lagos",
+      country: "Nigeria",
+      email: "hello@unverified.example",
+      phone: "+2348011111111",
+      ownerUserId: pendingCompanyUser.id,
+      verificationStatus: "UNVERIFIED",
+    },
+  });
+
+  // A third company that is verified but whose subscription has lapsed. It
+  // proves the gate checks expiry, not just that a row exists.
+  const expiredCompany = await prisma.company.create({
+    data: {
+      companyCode: "EXPIRED_CO",
+      name: "Lapsed Subscription Ltd",
+      industry: "Logistics",
+      address: "4 Broad Street",
+      state: "Lagos",
+      country: "Nigeria",
+      email: "hello@lapsed.example",
+      phone: "+2348022222222",
+      ownerUserId: expiredCompanyUser.id,
       verificationStatus: "VERIFIED",
       verifiedById: adminUser.id,
       verifiedAt: new Date(),
@@ -183,19 +222,46 @@ async function main() {
     },
   });
 
+  // Paystack's company is verified and paid up, so it may post placements.
+  const subscription = await prisma.subscription.create({
+    data: {
+      companyId: company.id,
+      planId: plan.id,
+      status: "ACTIVE",
+      startDate: new Date(Date.now() - 10 * 86_400_000),
+      expiryDate: new Date(Date.now() + 80 * 86_400_000),
+    },
+  });
+
+  const expiredSubscription = await prisma.subscription.create({
+    data: {
+      companyId: expiredCompany.id,
+      planId: plan.id,
+      status: "EXPIRED",
+      startDate: new Date(Date.now() - 100 * 86_400_000),
+      expiryDate: new Date(Date.now() - 10 * 86_400_000),
+    },
+  });
+
   console.log(`
 Seeded SIWESFlow dev data. Password for every account: ${PASSWORD}
 
   PLATFORM_ADMIN     admin@siwesflow.dev
   SCHOOL_COORDINATOR coordinator@siwesflow.dev
   COMPANY_ADMIN      company@siwesflow.dev
+  COMPANY_ADMIN      pendingcompany@siwesflow.dev   (unverified, no subscription)
+  COMPANY_ADMIN      expiredcompany@siwesflow.dev   (verified, expired subscription)
   SUPERVISOR         supervisor@siwesflow.dev
   STUDENT            student@siwesflow.dev   (${student.studentCode})
   STUDENT            student2@siwesflow.dev  (${student2.studentCode})
 
   school    ${school.name} (${school.id})
   company   ${company.name} (${company.id})
+  company   ${pendingCompany.name} (${pendingCompany.id})
+  company   ${expiredCompany.name} (${expiredCompany.id})
   plan      ${plan.code} (${plan.id})
+  sub       ${subscription.status} until ${subscription.expiryDate?.toISOString()}
+  sub       ${expiredSubscription.status} until ${expiredSubscription.expiryDate?.toISOString()}
 `);
 }
 

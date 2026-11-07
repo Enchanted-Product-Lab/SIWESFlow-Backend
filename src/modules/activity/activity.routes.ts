@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../../middlewares/auth.js";
+import { activityReviewLimiter } from "../../middlewares/rate-limiters.js";
 import { idParam } from "../profiles/common.schema.js";
 import {
   createActivitySchema,
@@ -50,6 +51,7 @@ activityRouter.delete("/:id", requireRole("PLATFORM_ADMIN"), async (req, res) =>
 activityRouter.post(
   "/:id/review",
   requireRole("SUPERVISOR"),
+  activityReviewLimiter,
   async (req, res) => {
     const { id } = idParam.parse(req.params);
     const body = reviewActivitySchema.parse(req.body);

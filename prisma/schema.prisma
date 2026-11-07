@@ -57,6 +57,8 @@ model User {
   verifiedPayments    Payment[]    @relation("PaymentVerifiedBy")
   submittedPayments   Payment[]    @relation("PaymentSubmittedBy")
 
+  auditLogs AuditLog[] @relation("AuditActor")
+
 
 //Refresh_Tokens
 refreshTokens RefreshToken[]

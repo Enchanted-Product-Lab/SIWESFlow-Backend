@@ -3,8 +3,11 @@ import {
   ApplicationStatus,
   PlacementApprovalStatus,
   PlacementStatus,
+  SubscriptionStatus,
+  VerificationStatus,
 } from "../../generated/prisma/client.js";
 import { prisma } from "../../lib/prisma.js";
+import { auditData } from "../../lib/audit.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/http-error.js";
 import { isUniqueViolation, skipTake, type Page } from "../../lib/pagination.js";
 import { stripUndefined } from "../../lib/object.js";
@@ -58,6 +61,37 @@ function canManageCompanyPlacements(actor: Actor, companyId: string): boolean {
   return isAdmin(actor) || (actor.role === "COMPANY_ADMIN" && actor.ownedCompanyId === companyId);
 }
 
+/**
+ * Round 3's posting gate: a company can only publish placements when its
+ * profile is verified and it has a subscription that has not expired.
+ * Platform admins are exempt because they post on a company's behalf.
+ */
+async function assertCanPostPlacement(actor: Actor, companyId: string): Promise<void> {
+  if (isAdmin(actor)) return;
+
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: {
+      verificationStatus: true,
+      subscriptions: {
+        where: {
+          status: SubscriptionStatus.ACTIVE,
+          expiryDate: { gt: new Date() },
+        },
+        select: { id: true },
+        take: 1,
+      },
+    },
+  });
+  if (!company) throw notFound("Company not found");
+  if (company.verificationStatus !== VerificationStatus.VERIFIED) {
+    throw forbidden("Your company must be verified before posting placements");
+  }
+  if (company.subscriptions.length === 0) {
+    throw forbidden("Your company needs an active subscription before posting placements");
+  }
+}
+
 export async function createPlacement(userId: string, input: CreatePlacementInput) {
   const actor = await loadActor(userId);
   if (actor.role !== "COMPANY_ADMIN" && !isAdmin(actor)) {
@@ -69,30 +103,44 @@ export async function createPlacement(userId: string, input: CreatePlacementInpu
   const companyId = actor.ownedCompanyId ?? input.companyId;
   if (!companyId) throw badRequest("companyId is required when posting for a company");
 
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { id: true },
-  });
-  if (!company) throw notFound("Company not found");
+  await assertCanPostPlacement(actor, companyId);
 
-  return prisma.placement.create({
-    data: {
-      companyId,
-      title: input.title,
-      description: input.description ?? null,
-      department: input.department,
-      requiredLevel: input.requiredLevel ?? null,
-      requiredSkills: input.requiredSkills ?? [],
-      availableSlots: input.availableSlots,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      location: input.location ?? null,
-      workMode: input.workMode,
-      isActive: true,
-      // New placements always wait for the school's verdict.
-      approvalStatus: PlacementApprovalStatus.PENDING,
-    },
-    include: PLACEMENT_INCLUDE,
+  return prisma.$transaction(async (tx) => {
+    const placement = await tx.placement.create({
+      data: {
+        companyId,
+        title: input.title,
+        description: input.description ?? null,
+        department: input.department,
+        requiredLevel: input.requiredLevel ?? null,
+        requiredSkills: input.requiredSkills ?? [],
+        availableSlots: input.availableSlots,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        location: input.location ?? null,
+        workMode: input.workMode,
+        isActive: true,
+        // New placements always wait for the school's verdict.
+        approvalStatus: PlacementApprovalStatus.PENDING,
+      },
+      include: PLACEMENT_INCLUDE,
+    });
+
+    await tx.auditLog.create({
+      data: auditData({
+        actorId: actor.id,
+        action: "PLACEMENT_CREATED",
+        entityType: "Placement",
+        entityId: placement.id,
+        metadata: {
+          companyId,
+          title: placement.title,
+          availableSlots: placement.availableSlots,
+        },
+      }),
+    });
+
+    return placement;
   });
 }
 
@@ -216,15 +264,36 @@ export async function approvePlacement(
   const placement = await prisma.placement.findUnique({ where: { id: placementId } });
   if (!placement) throw notFound("Placement not found");
 
-  return prisma.placement.update({
-    where: { id: placementId },
-    data: {
-      approvalStatus: input.approvalStatus,
-      approvedById: actor.id,
-      approvedAt: new Date(),
-      approvalNote: input.approvalNote ?? null,
-    },
-    include: PLACEMENT_INCLUDE,
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.placement.update({
+      where: { id: placementId },
+      data: {
+        approvalStatus: input.approvalStatus,
+        approvedById: actor.id,
+        approvedAt: new Date(),
+        approvalNote: input.approvalNote ?? null,
+      },
+      include: PLACEMENT_INCLUDE,
+    });
+
+    await tx.auditLog.create({
+      data: auditData({
+        actorId: actor.id,
+        action:
+          input.approvalStatus === PlacementApprovalStatus.APPROVED
+            ? "PLACEMENT_APPROVED"
+            : "PLACEMENT_REJECTED",
+        entityType: "Placement",
+        entityId: updated.id,
+        metadata: {
+          companyId: updated.companyId,
+          approvalStatus: input.approvalStatus,
+          approvalNote: input.approvalNote ?? null,
+        },
+      }),
+    });
+
+    return updated;
   });
 }
 

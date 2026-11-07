@@ -1,5 +1,9 @@
 import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../../middlewares/auth.js";
+import {
+  applicationLimiter,
+  placementWriteLimiter,
+} from "../../middlewares/rate-limiters.js";
 import { idParam } from "../profiles/common.schema.js";
 import {
   applySchema,
@@ -24,10 +28,15 @@ import {
 export const placementRouter = Router();
 placementRouter.use(requireAuth);
 
-placementRouter.post("/", requireRole("COMPANY_ADMIN", "PLATFORM_ADMIN"), async (req, res) => {
-  const body = createPlacementSchema.parse(req.body);
-  res.status(201).json(await createPlacement(currentUser(req).id, body));
-});
+placementRouter.post(
+  "/",
+  requireRole("COMPANY_ADMIN", "PLATFORM_ADMIN"),
+  placementWriteLimiter,
+  async (req, res) => {
+    const body = createPlacementSchema.parse(req.body);
+    res.status(201).json(await createPlacement(currentUser(req).id, body));
+  },
+);
 
 placementRouter.get("/", async (req, res) => {
   res.json(await listPlacements(currentUser(req).id, listPlacementsQuery.parse(req.query)));
@@ -72,7 +81,7 @@ placementRouter.post(
   },
 );
 
-placementRouter.post("/:id/apply", requireRole("STUDENT"), async (req, res) => {
+placementRouter.post("/:id/apply", requireRole("STUDENT"), applicationLimiter, async (req, res) => {
   const { id } = idParam.parse(req.params);
   const body = applySchema.parse(req.body ?? {});
   res.status(201).json(await applyToPlacement(currentUser(req).id, id, body));
