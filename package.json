@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "audit:documents": "tsx src/scripts/audit-documents.ts",
     "backup:check": "tsx src/scripts/backup-check.ts",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test:coverage": "tsx --test --experimental-test-coverage \"src/**/*.test.ts\"",
+    "test:db": "RUN_DB_TESTS=1 tsx --test \"src/**/*.test.ts\""
   },
   "keywords": [],
   "author": "",
