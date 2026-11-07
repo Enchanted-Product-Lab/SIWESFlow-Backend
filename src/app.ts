@@ -8,6 +8,8 @@ import { schoolRouter } from "./modules/profiles/school.routes.js";
 import { companyRouter } from "./modules/profiles/company.routes.js";
 import { supervisorRouter } from "./modules/profiles/supervisor.routes.js";
 import { activityRouter } from "./modules/activity/activity.routes.js";
+import { placementRouter } from "./modules/placement/placement.routes.js";
+import { billingRouter } from "./modules/billing/billing.routes.js";
 import { verificationRouter } from "./modules/verification/verification.routes.js";
 import { integrityRouter } from "./modules/admin/integrity.routes.js";
 
@@ -44,6 +46,8 @@ app.use("/api/supervisors", supervisorRouter);
 app.use("/api/activities", activityRouter);
 app.use("/api/verifications", verificationRouter);
 app.use("/api/admin/integrity", integrityRouter);
+app.use("/api/placements", placementRouter);
+app.use("/api/billing", billingRouter);
 
 // Specific application and validation errors
 app.use(httpErrorHandler);

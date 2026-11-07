@@ -5,3 +5,7 @@ node_modules
 /src/generated/prisma
 dist
 backups/
+
+# Local dev database cluster and logs
+.pgdata/
+*.log

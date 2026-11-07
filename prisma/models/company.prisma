@@ -32,6 +32,8 @@ model Company {
   placements        Placement[]
   documents         Document[]
   approvedBySchools School[] @relation("SchoolApprovedCompanies")
+  subscriptions     Subscription[]
+  payments          Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

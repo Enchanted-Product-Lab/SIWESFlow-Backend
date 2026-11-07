@@ -49,7 +49,7 @@ describe("logbook activity API", { skip: !run }, () => {
 
   const mkUser = async (key: string, role: "STUDENT" | "SCHOOL_COORDINATOR" | "SUPERVISOR" | "PLATFORM_ADMIN") => {
     const created = await prisma.user.create({
-      data: { email: `${key}-${suffix}@test.dev`, password: "x", role },
+      data: { email: `${key}-${suffix}@test.dev`, passwordHash: "x", role },
     });
     ids[key] = created.id;
   };

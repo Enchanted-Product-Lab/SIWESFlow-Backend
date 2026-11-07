@@ -29,7 +29,7 @@ describe("profiles, access and verification flows", { skip: !run }, () => {
 
   const mkUser = async (key: string, role: "STUDENT" | "SCHOOL_COORDINATOR" | "COMPANY_ADMIN" | "PLATFORM_ADMIN" | "SUPERVISOR") => {
     const u = await prisma.user.create({
-      data: { email: `${key}-${suffix}@test.dev`, password: "x", role },
+      data: { email: `${key}-${suffix}@test.dev`, passwordHash: "x", role },
     });
     ids[key] = u.id;
   };

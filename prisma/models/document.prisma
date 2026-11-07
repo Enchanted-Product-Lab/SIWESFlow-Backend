@@ -60,6 +60,7 @@ model Document {
   verificationId String?
 
   activities Activity[]
+  payments   Payment[] @relation("PaymentProof")
 
   @@index([studentId])
   @@index([schoolId])
