@@ -1,4 +1,3 @@
-
 import { Router } from "express";
 import type { Request, Response } from "express";
 import multer from "multer";
@@ -17,6 +16,7 @@ import { badRequest } from "../lib/http-error.js";
 import { currentUser, requireAuth } from "../middlewares/auth.js";
 import { OWNER_TYPES } from "../modules/access/document-policy.js";
 import { DocumentType } from "../generated/prisma/client.js";
+import { prisma } from "../lib/prisma.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -42,7 +42,31 @@ documentRouter.use(requireAuth);
 documentRouter.post("/", upload.single("file"), async (req: Request, res: Response) => {
   if (!req.file) throw badRequest("No file provided");
 
-  const body = uploadBody.parse(req.body);
+  let ownerType = req.body.ownerType;
+  let ownerId = req.body.ownerId;
+  let docType = req.body.documentType;
+
+  // Normalize frontend document types if aliases sent
+  if (docType === "PASSPORT") docType = "PASSPORT_PHOTO";
+  if (docType === "STUDENT_ID") docType = "STUDENT_ID_CARD";
+
+  // Auto-resolve owner if caller is a student
+  if (!ownerType || !ownerId) {
+    const student = await prisma.student.findUnique({
+      where: { userId: currentUser(req).id },
+      select: { id: true },
+    });
+    if (student) {
+      ownerType = ownerType ?? "student";
+      ownerId = ownerId ?? student.id;
+    }
+  }
+
+  const body = uploadBody.parse({
+    ownerType,
+    ownerId,
+    documentType: docType,
+  });
 
   try {
     const document = await createDocument({

@@ -1,4 +1,3 @@
-
 import express from "express";
 import { prisma } from "./lib/prisma.js";
 import { documentRouter } from "./routes/document.routes.js";
@@ -24,6 +23,7 @@ app.use(express.json({ limit: "10kb" }));
 
 // Authentication routes
 app.use("/api/auth", authRouter);
+app.use("/auth", authRouter);
 
 // Health check
 app.get("/health", async (_req, res) => {
@@ -41,14 +41,24 @@ app.use("/api/documents", documentRouter);
 
 // Application routes
 app.use("/api/students", studentRouter);
+app.use("/api/student", studentRouter);
+app.use("/students", studentRouter);
+app.use("/student", studentRouter);
 app.use("/api/schools", schoolRouter);
+app.use("/schools", schoolRouter);
 app.use("/api/companies", companyRouter);
+app.use("/companies", companyRouter);
 app.use("/api/supervisors", supervisorRouter);
+app.use("/supervisors", supervisorRouter);
 app.use("/api/activities", activityRouter);
+app.use("/activities", activityRouter);
 app.use("/api/verifications", verificationRouter);
+app.use("/verifications", verificationRouter);
 app.use("/api/admin/integrity", integrityRouter);
 app.use("/api/placements", placementRouter);
+app.use("/placements", placementRouter);
 app.use("/api/billing", billingRouter);
+app.use("/billing", billingRouter);
 
 // Specific application and validation errors
 app.use(httpErrorHandler);
