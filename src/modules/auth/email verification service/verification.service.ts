@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../../../lib/prisma.js";
 import { env } from "../../../config/env.js";
-import { sendEmail } from "../email verification service/email.service.js";
+import { enqueueVerificationEmail, drainVerificationQueue } from "./queue.service.js";
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -31,14 +31,15 @@ export async function sendVerificationEmail(userId: string, email: string): Prom
   const token = await createVerificationToken(userId);
   const link = `${env.EMAIL_VERIFICATION_URL}?token=${token}`;
 
-  await sendEmail({
-    to: email,
-    subject: "Verify your SIWESFlow email address",
-    text:
-      `Welcome to SIWESFlow.\n\n` +
-      `Verify your email address with this link (valid for 24 hours):\n${link}\n\n` +
-      `If you didn't create an account, you can ignore this email.`,
+  await enqueueVerificationEmail({
+    userId,
+    email,
+    link,
+    timestamp: Date.now(),
   });
+
+  // Drain pending jobs so the verification email is delivered
+  await drainVerificationQueue();
 }
 
 export async function resendVerificationEmail(email: string): Promise<void> {
