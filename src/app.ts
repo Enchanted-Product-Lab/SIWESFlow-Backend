@@ -37,6 +37,7 @@ app.get("/health", async (_req, res) => {
 
 // Document routes
 app.use("/documents", documentRouter);
+app.use("/api/documents", documentRouter);
 
 // Application routes
 app.use("/api/students", studentRouter);
