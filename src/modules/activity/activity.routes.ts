@@ -46,13 +46,12 @@ activityRouter.delete("/:id", requireRole("PLATFORM_ADMIN"), async (req, res) =>
   res.status(204).send();
 });
 
-// Supervisor review of an activity
-activityRouter.post(
-  "/:id/review",
-  requireRole("SUPERVISOR"),
-  async (req, res) => {
-    const { id } = idParam.parse(req.params);
-    const body = reviewActivitySchema.parse(req.body);
-    res.json(await reviewActivity(currentUser(req).id, id, body));
-  },
-);
+// Supervisor review of an activity (handles both POST and PATCH)
+const handleReview = async (req: any, res: any) => {
+  const { id } = idParam.parse(req.params);
+  const body = reviewActivitySchema.parse(req.body);
+  res.json(await reviewActivity(currentUser(req).id, id, body));
+};
+
+activityRouter.post("/:id/review", requireRole("SUPERVISOR"), handleReview);
+activityRouter.patch("/:id/review", requireRole("SUPERVISOR"), handleReview);
