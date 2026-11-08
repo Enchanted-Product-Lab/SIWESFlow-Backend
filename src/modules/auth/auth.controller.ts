@@ -1,14 +1,10 @@
 import type { Request, Response } from "express";
-import {
-  loginSchema,
-  registerSchema,
-  resendVerificationSchema,
-  verifyEmailSchema,
-} from "./auth.schema.js";
+import { loginSchema, registerSchema, resendVerificationSchema, verifyEmailSchema } from "./auth.schema.js";
 import { loginUser, registerUser } from "./auth.service.js";
-import { resendVerificationEmail, verifyEmailToken } from "../auth/email verification service/verification.service.js";
+import { resendVerificationEmail, verifyEmailToken } from "./email verification service/verification.service.js";
+import { ACCESS_TOKEN_TTL_SECONDS } from "./token service/token.service.js";
 import { REFRESH_COOKIE_NAME, refreshCookieOptions } from "./auth.cookies.js";
-import { ACCESS_TOKEN_TTL_SECONDS } from "../auth/token service/token.service.js";
+
 export async function register(req: Request, res: Response) {
   const parsed = registerSchema.safeParse(req.body);
 
@@ -27,7 +23,8 @@ export async function register(req: Request, res: Response) {
 }
 
 export async function verifyEmail(req: Request, res: Response) {
-  const parsed = verifyEmailSchema.safeParse(req.body);
+  const token = (req.body?.token || req.query?.token) as string | undefined;
+  const parsed = verifyEmailSchema.safeParse({ token });
   const verified = parsed.success && (await verifyEmailToken(parsed.data.token));
 
   if (!verified) {

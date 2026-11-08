@@ -19,8 +19,8 @@ router.use((_req, res, next) => {
 
 router.post("/register", registerLimiter, register);
 router.post("/verify-email", verifyEmailLimiter, verifyEmail);
+router.get("/verify-email", verifyEmailLimiter, verifyEmail);
 router.post("/resend-verification", resendIpLimiter, resendEmailLimiter, resendVerification);
 router.post("/login", loginIpLimiter, loginEmailLimiter, login);
 
 export default router;
-

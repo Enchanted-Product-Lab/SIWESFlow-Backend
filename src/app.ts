@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { prisma } from "./lib/prisma.js";
 import { documentRouter } from "./routes/document.routes.js";
 
@@ -18,6 +19,13 @@ import { httpErrorHandler } from "./middlewares/http-error-handler.js";
 import { errorHandler } from "./middlewares/errorhandlers.js";
 
 const app = express();
+
+app.use(cors({
+  origin: true, // Allow frontend dev & preview origins
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+}));
 
 app.use(express.json({ limit: "10kb" }));
 
