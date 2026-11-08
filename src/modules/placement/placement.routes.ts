@@ -2,6 +2,7 @@ import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../../middlewares/auth.js";
 import { idParam } from "../profiles/common.schema.js";
 import {
+  acceptApplicationSchema,
   applySchema,
   approvePlacementSchema,
   createPlacementSchema,
@@ -92,7 +93,8 @@ placementRouter.post(
   requireRole("COMPANY_ADMIN", "PLATFORM_ADMIN"),
   async (req, res) => {
     const { id } = idParam.parse(req.params);
-    res.json(await acceptApplication(currentUser(req).id, id));
+    const body = acceptApplicationSchema.parse(req.body ?? {});
+    res.json(await acceptApplication(currentUser(req).id, id, body));
   },
 );
 

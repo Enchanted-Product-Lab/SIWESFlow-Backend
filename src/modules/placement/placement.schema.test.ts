@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  acceptApplicationSchema,
   createPlacementSchema,
   updatePlacementSchema,
   listPlacementsQuery,
@@ -91,4 +92,12 @@ test("approvePlacementSchema requires valid approval status", () => {
   assert.equal(approvePlacementSchema.safeParse({ approvalStatus: "REJECTED", approvalNote: "Slots full" }).success, true);
   assert.equal(approvePlacementSchema.safeParse({ approvalStatus: "PENDING" }).success, true);
   assert.equal(approvePlacementSchema.safeParse({ approvalStatus: "INVALID_STATUS" }).success, false);
+});
+
+test("acceptApplicationSchema validates optional supervisorId and note", () => {
+  assert.equal(acceptApplicationSchema.safeParse({}).success, true);
+  assert.equal(acceptApplicationSchema.safeParse({ supervisorId: "sup-123" }).success, true);
+  assert.equal(acceptApplicationSchema.safeParse({ supervisorId: "sup-123", note: "Welcome to the team" }).success, true);
+  assert.equal(acceptApplicationSchema.safeParse({ supervisorId: "" }).success, false);
+  assert.equal(acceptApplicationSchema.safeParse({ unknownField: "bad" }).success, false);
 });

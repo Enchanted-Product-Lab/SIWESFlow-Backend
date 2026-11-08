@@ -10,6 +10,7 @@ import { isUniqueViolation, skipTake, type Page } from "../../lib/pagination.js"
 import { stripUndefined } from "../../lib/object.js";
 import { isAdmin, loadActor, type Actor } from "../access/actor.js";
 import type {
+  AcceptApplicationInput,
   ApplyInput,
   ApprovePlacementInput,
   CreatePlacementInput,
@@ -283,8 +284,13 @@ export async function applyToPlacement(userId: string, placementId: string, inpu
 /**
  * Accepting is the only place a slot is consumed, so the count can never drift
  * from the number of students actually placed.
+ * Automatically assigns the company's active supervisor to the student.
  */
-export async function acceptApplication(userId: string, applicationId: string) {
+export async function acceptApplication(
+  userId: string,
+  applicationId: string,
+  input?: AcceptApplicationInput,
+) {
   const actor = await loadActor(userId);
 
   return prisma.$transaction(async (tx) => {
@@ -321,11 +327,40 @@ export async function acceptApplication(userId: string, applicationId: string) {
       include: { student: { select: STUDENT_SUMMARY } },
     });
 
+    let supervisorIdToAssign: string | null = null;
+    if (input?.supervisorId) {
+      const sup = await tx.supervisor.findFirst({
+        where: {
+          id: input.supervisorId,
+          companyId: application.placement.companyId,
+        },
+      });
+      if (!sup) {
+        throw badRequest("Specified supervisor does not belong to this company");
+      }
+      supervisorIdToAssign = sup.id;
+    } else {
+      const activeSup =
+        (await tx.supervisor.findFirst({
+          where: {
+            companyId: application.placement.companyId,
+            activationStatus: "ACTIVE",
+          },
+          orderBy: { createdAt: "asc" },
+        })) ||
+        (await tx.supervisor.findFirst({
+          where: { companyId: application.placement.companyId },
+          orderBy: { createdAt: "asc" },
+        }));
+      supervisorIdToAssign = activeSup?.id ?? null;
+    }
+
     await tx.student.update({
       where: { id: application.studentId },
       data: {
         placementId: application.placementId,
         placementStatus: PlacementStatus.PLACED,
+        ...(supervisorIdToAssign ? { supervisorId: supervisorIdToAssign } : {}),
       },
     });
 

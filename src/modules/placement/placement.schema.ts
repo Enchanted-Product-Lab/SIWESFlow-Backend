@@ -70,8 +70,17 @@ export const respondApplicationSchema = z
   .object({ note: optionalText(1000).optional() })
   .strict();
 
+export const acceptApplicationSchema = z
+  .object({
+    supervisorId: z.string().trim().min(1).max(64).optional(),
+    note: optionalText(1000).optional(),
+  })
+  .strict()
+  .optional();
+
 export type CreatePlacementInput = z.infer<typeof createPlacementSchema>;
 export type UpdatePlacementInput = z.infer<typeof updatePlacementSchema>;
 export type ListPlacementsQuery = z.infer<typeof listPlacementsQuery>;
 export type ApplyInput = z.infer<typeof applySchema>;
 export type ApprovePlacementInput = z.infer<typeof approvePlacementSchema>;
+export type AcceptApplicationInput = z.infer<typeof acceptApplicationSchema>;
