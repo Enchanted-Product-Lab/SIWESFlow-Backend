@@ -47,10 +47,16 @@ export type CreateActivityInput = z.infer<typeof createActivitySchema>;
 export type UpdateActivityInput = z.infer<typeof updateActivitySchema>;
 export type ListActivitiesQuery = z.infer<typeof listActivitiesQuery>;
 
-export const reviewActivitySchema = z.object({
-  status: z.enum(["APPROVED", "NEEDS_REVISION"]),
-  rating: z.coerce.number().int().min(1).max(5).optional(),
-  comment: optionalText(1000).optional(),
-});
+export const reviewActivitySchema = z
+  .object({
+    status: z.enum(["APPROVED", "NEEDS_REVISION"]),
+    rating: z.coerce.number().int().min(1).max(5).optional(),
+    comment: optionalText(1000).optional(),
+  })
+  // A student can only act on a verdict that says what to change.
+  .refine((review) => review.status === "APPROVED" || review.comment, {
+    message: "A comment is required unless the entry is approved",
+    path: ["comment"],
+  });
 
 export type ReviewActivityInput = z.infer<typeof reviewActivitySchema>;

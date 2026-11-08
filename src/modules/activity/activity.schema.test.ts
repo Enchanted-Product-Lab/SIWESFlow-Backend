@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   createActivitySchema,
   listActivitiesQuery,
+  reviewActivitySchema,
   updateActivitySchema,
 } from "./activity.schema.js";
 
@@ -79,6 +80,13 @@ test("an update must change something and may be partial", () => {
   assert.equal(updateActivitySchema.safeParse({}).success, false);
   assert.ok(updateActivitySchema.safeParse({ title: "Renamed" }).success);
   assert.equal(updateActivitySchema.safeParse({ status: "APPROVED" }).success, false);
+});
+
+test("a review needs a comment unless it approves the entry", () => {
+  assert.ok(reviewActivitySchema.safeParse({ status: "APPROVED" }).success);
+  assert.ok(reviewActivitySchema.safeParse({ status: "NEEDS_REVISION", comment: "Add detail" }).success);
+  assert.equal(reviewActivitySchema.safeParse({ status: "NEEDS_REVISION" }).success, false);
+  assert.equal(reviewActivitySchema.safeParse({ status: "NEEDS_REVISION", comment: "   " }).success, false);
 });
 
 test("list query defaults paging", () => {

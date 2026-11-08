@@ -49,7 +49,7 @@ const ENTRY_INCLUDE = {
 
 type EntryWithRelations = Prisma.ActivityGetPayload<{ include: typeof ENTRY_INCLUDE }>;
 
-function evidenceOf(entry: EntryWithRelations) {
+function evidenceOf(entry: Pick<EntryWithRelations, "document">) {
   if (!entry.document) return [];
   return [
     {
@@ -201,9 +201,13 @@ function listScope(actor: Actor): Prisma.ActivityWhereInput | null {
   return null;
 }
 
-type EntrySummary = Prisma.ActivityGetPayload<{
-  include: { student: { select: typeof STUDENT_SUMMARY } };
-}>;
+const LIST_INCLUDE = {
+  student: { select: STUDENT_SUMMARY },
+  document: { select: EVIDENCE_SELECT },
+} as const;
+
+type EntryRow = Prisma.ActivityGetPayload<{ include: typeof LIST_INCLUDE }>;
+type EntrySummary = Omit<EntryRow, "document"> & { evidence: ReturnType<typeof evidenceOf> };
 
 export async function listActivities(
   userId: string,
@@ -237,13 +241,14 @@ export async function listActivities(
     prisma.activity.findMany({
       where,
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      include: { student: { select: STUDENT_SUMMARY } },
+      include: LIST_INCLUDE,
       ...skipTake(q.page, q.pageSize),
     }),
     prisma.activity.count({ where }),
   ]);
 
-  return { data: rows, page: q.page, pageSize: q.pageSize, total };
+  const data = rows.map(({ document, ...row }) => ({ ...row, evidence: evidenceOf({ document }) }));
+  return { data, page: q.page, pageSize: q.pageSize, total };
 }
 
 export async function updateActivity(
@@ -322,13 +327,14 @@ export async function reviewActivity(
   // reviewedById points at the Supervisor row, not the User row.
   const { count } = await prisma.activity.updateMany({
     where: { id: activityId, status: activity.status },
-    data: stripUndefined({
+    data: {
       status: input.status,
       reviewedById: actor.supervisorId,
       reviewedAt: new Date(),
-      comment: input.comment,
-      rating: input.rating,
-    }),
+      // Always written: left out, this review would show the previous one's.
+      comment: input.comment || null,
+      rating: input.rating ?? null,
+    },
   });
   if (count === 0) throw conflict("This entry was already reviewed");
 

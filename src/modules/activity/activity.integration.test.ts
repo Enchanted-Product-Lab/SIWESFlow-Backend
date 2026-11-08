@@ -95,6 +95,7 @@ describe("logbook activity API", { skip: !run }, () => {
     await mkUser("stuB", "STUDENT");
     await mkUser("coord", "SCHOOL_COORDINATOR");
     await mkUser("sup", "SUPERVISOR");
+    await mkUser("supOther", "SUPERVISOR");
     await mkUser("admin", "PLATFORM_ADMIN");
 
     const schoolOne = await prisma.school.create({
@@ -125,6 +126,13 @@ describe("logbook activity API", { skip: !run }, () => {
       },
     });
     ids.supervisor = supervisor.id;
+    // Same company, no students assigned: company membership must not grant access.
+    await prisma.supervisor.create({
+      data: {
+        userId: id("supOther"), companyId: company.id, fullName: "Bola Ade", position: "Engineer",
+        department: "IT", email: `bola-${suffix}@test.dev`, phone: "+2348000000004",
+      },
+    });
 
     await mkStudent("studentA", "stuA", schoolOne.id, supervisor.id);
     await mkStudent("studentB", "stuB", schoolTwo.id);
@@ -331,5 +339,105 @@ describe("logbook activity API", { skip: !run }, () => {
 
     assert.equal((await call("admin", "DELETE", url)).status, 204);
     assert.equal((await call("admin", "GET", url)).status, 404);
+  });
+
+  // Inserted directly so these depend on the review rules, not the date rules.
+  const mkEntry = (studentKey: string, title: string, documentId?: string) =>
+    prisma.activity.create({
+      data: {
+        studentId: id(studentKey),
+        date: new Date("2026-06-22"),
+        title,
+        description: "Review fixture",
+        hoursWorked: 4,
+        ...(documentId ? { documentId } : {}),
+      },
+    });
+
+  test("only the assigned supervisor can review, with a valid verdict", async () => {
+    const { id: entryId } = await mkEntry("studentA", "To review");
+    const url = `/api/activities/${entryId}/review`;
+    const verdict = { status: "APPROVED", rating: 5, comment: "Solid work" };
+
+    assert.equal((await call(null, "POST", url, verdict)).status, 401);
+    assert.equal((await call("stuA", "POST", url, verdict)).status, 403);
+    assert.equal((await call("admin", "POST", url, verdict)).status, 403);
+    assert.equal((await call("supOther", "POST", url, verdict)).status, 404);
+    assert.equal((await call("sup", "POST", "/api/activities/missing/review", verdict)).status, 404);
+
+    assert.equal((await call("sup", "POST", url, { ...verdict, status: "REJECTED" })).status, 400);
+    assert.equal((await call("sup", "POST", url, { ...verdict, status: "approved" })).status, 400);
+    assert.equal((await call("sup", "POST", url, { ...verdict, rating: 0 })).status, 400);
+    assert.equal((await call("sup", "POST", url, { ...verdict, rating: 6 })).status, 400);
+
+    const reviewed = await call("sup", "POST", url, verdict);
+    assert.equal(reviewed.status, 200);
+    assert.equal(reviewed.body.status, "APPROVED");
+    assert.equal(reviewed.body.rating, 5);
+    assert.equal(reviewed.body.comment, "Solid work");
+    assert.equal(reviewed.body.reviewedById, id("supervisor"));
+    assert.ok(reviewed.body.reviewedAt);
+
+    const read = await call("stuA", "GET", `/api/activities/${entryId}`);
+    assert.equal(read.body.review.status, "APPROVED");
+    assert.equal(read.body.review.reviewedBy.fullName, "Ada Obi");
+
+    assert.equal((await call("sup", "POST", url, verdict)).status, 409);
+  });
+
+  test("a new review replaces the previous comment and rating", async () => {
+    const { id: entryId } = await mkEntry("studentA", "Reviewed twice");
+    const url = `/api/activities/${entryId}/review`;
+
+    const sentBack = await call("sup", "POST", url, {
+      status: "NEEDS_REVISION",
+      rating: 2,
+      comment: "Add more detail",
+    });
+    assert.equal(sentBack.body.comment, "Add more detail");
+
+    const approved = await call("sup", "PATCH", url, { status: "APPROVED" });
+    assert.equal(approved.status, 200);
+    assert.equal(approved.body.status, "APPROVED");
+    assert.equal(approved.body.comment, null);
+    assert.equal(approved.body.rating, null);
+  });
+
+  test("a supervisor lists only assigned students' entries, with evidence metadata", async () => {
+    const doc = await prisma.document.create({
+      data: {
+        studentId: id("studentA"),
+        documentType: "ACTIVITY_EVIDENCE",
+        filename: "wiring.png",
+        fileFormat: "PNG",
+        fileSizeBytes: 4096,
+        storageKey: `student/${id("studentA")}/ACTIVITY_EVIDENCE/wiring.png`,
+      },
+    });
+    const withEvidence = await mkEntry("studentA", "With evidence", doc.id);
+    const without = await mkEntry("studentA", "Without evidence");
+    const unassigned = await mkEntry("studentB", "Someone else's student");
+
+    const list = await call("sup", "GET", "/api/activities?status=PENDING&pageSize=100");
+    assert.equal(list.status, 200);
+    const byId = new Map(list.body.data.map((a: { id: string }) => [a.id, a]));
+    assert.equal(byId.has(unassigned.id), false);
+
+    const row = byId.get(withEvidence.id) as Record<string, unknown>;
+    assert.deepEqual(row.evidence, [
+      {
+        documentId: doc.id,
+        fileName: "wiring.png",
+        fileFormat: "PNG",
+        fileSizeBytes: 4096,
+        uploadedAt: doc.uploadedAt.toISOString(),
+      },
+    ]);
+    assert.equal("document" in row, false);
+    assert.deepEqual((byId.get(without.id) as Record<string, unknown>).evidence, []);
+
+    const other = await call("supOther", "GET", "/api/activities");
+    assert.equal(other.status, 200);
+    assert.equal(other.body.total, 0);
   });
 });
