@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "audit:documents": "tsx src/scripts/audit-documents.ts",
     "backup:check": "tsx src/scripts/backup-check.ts",
@@ -21,6 +21,12 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@supabase/supabase-js": "^2.117.2",
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
     "@upstash/redis": "^1.41.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
@@ -31,19 +37,13 @@
     "jose": "^6.2.13",
     "multer": "^2.4.0",
     "pg": "^8.23.0",
+    "prisma": "^7.10.0",
+    "typescript": "^7.0.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/multer": "^2.2.0",
-    "@types/node": "^22.20.5",
-    "@types/pg": "^8.23.1",
     "embedded-postgres": "^17.11.0-beta.19",
-    "prisma": "^7.10.0",
-    "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "tsx": "^4.23.13"
   },
   "allowScripts": {
     "prisma@7.10.0": true,
