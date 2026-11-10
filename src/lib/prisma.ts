@@ -6,15 +6,25 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
-const connectionString = process.env.DATABASE_URL;
+const rawConnectionString = process.env.DATABASE_URL;
 const isRemote =
-  !!connectionString &&
-  !connectionString.includes("127.0.0.1") &&
-  !connectionString.includes("localhost");
+  !!rawConnectionString &&
+  !rawConnectionString.includes("127.0.0.1") &&
+  !rawConnectionString.includes("localhost");
+
+// Strip sslmode from the URL when remote so that pg's ssl options ({ rejectUnauthorized: false }) take precedence
+const connectionString = isRemote && rawConnectionString
+  ? rawConnectionString.replace(/([?&])sslmode=[^&]+(&|$)/, "$1").replace(/[?&]$/, "")
+  : rawConnectionString;
 
 const pool = new Pool({
   connectionString,
   ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),
+  connectionTimeoutMillis: 10000,
+});
+
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle database client:", err);
 });
 
 const adapter = new PrismaPg(pool);
