@@ -96,6 +96,10 @@ export async function listStudents(
     schoolId?: string | undefined;
     verificationStatus?: Student["verificationStatus"] | undefined;
     placementStatus?: Student["placementStatus"] | undefined;
+    engagementStatus?: Student["engagementStatus"] | undefined;
+    faculty?: string | undefined;
+    department?: string | undefined;
+    companyId?: string | undefined;
     search?: string | undefined;
   }
 ): Promise<Page<Partial<Student>>> {
@@ -110,7 +114,11 @@ export async function listStudents(
         schoolId: q.schoolId,
         verificationStatus: q.verificationStatus,
         placementStatus: q.placementStatus,
+        engagementStatus: q.engagementStatus,
+        faculty: q.faculty,
+        department: q.department,
       }),
+      q.companyId ? { placement: { companyId: q.companyId } } : {},
       q.search
         ? {
             OR: [

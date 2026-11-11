@@ -35,7 +35,7 @@ model Activity {
   // updatedAt moves on any edit, so neither answers "when was this submitted".
   submittedAt DateTime?
 
-  // Set when the entry arrived in a burst of submissions (TRD §9.5). A flag for
+  // Set when the entry arrived in a burst of submissions. A flag for
   // the reviewer, never a block: catching up on a week's entries is legitimate.
   bulkFlaggedAt DateTime?
 

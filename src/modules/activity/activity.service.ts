@@ -63,7 +63,7 @@ function evidenceOf(entry: Pick<EntryWithRelations, "document">) {
   ];
 }
 
-// The student record wins; the placement is the fallback (TRD §5.1).
+// The student record wins; the placement is the fallback.
 async function siwesWindowOf(studentId: string): Promise<SiwesWindow> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -106,6 +106,16 @@ async function assertEvidence(documentId: string | null | undefined, studentId: 
 }
 
 const HOUR = 60 * 60 * 1000;
+
+// Feeds the engagement engine. A placed student who just submitted
+// is ACTIVE now, rather than at the next scheduled refresh.
+async function markSubmitted(tx: Prisma.TransactionClient, studentId: string, at: Date) {
+  await tx.student.update({ where: { id: studentId }, data: { lastActivitySubmittedAt: at } });
+  await tx.student.updateMany({
+    where: { id: studentId, placementStatus: "PLACED" },
+    data: { engagementStatus: "ACTIVE" },
+  });
+}
 
 export async function createActivity(userId: string, input: CreateActivityInput) {
   const { studentId } = await loadActor(userId);
@@ -153,6 +163,7 @@ export async function createActivity(userId: string, input: CreateActivityInput)
     await tx.activityEvent.create({
       data: { activityId: activity.id, fromStatus: null, toStatus: "PENDING", actorId: userId },
     });
+    await markSubmitted(tx, studentId, now);
     return activity;
   });
 }
@@ -331,6 +342,7 @@ export async function updateActivity(
         actorId: userId,
       },
     });
+    if (resubmitted) await markSubmitted(tx, activity.studentId, new Date());
     return tx.activity.findUniqueOrThrow({ where: { id: activityId } });
   });
 }

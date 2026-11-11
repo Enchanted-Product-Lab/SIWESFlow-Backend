@@ -61,3 +61,6 @@ export const activityWriteLimiter = rateLimit({
   keyGenerator: (req) => `activity:${req.user?.id}`,
   message: { error: "Too many requests, please try again later" },
 });
+
+// Public certificate check, per IP since there is no account to key on.
+export const certificateLookupLimiter = createLimiter(30);

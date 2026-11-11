@@ -36,6 +36,7 @@ model Supervisor {
   students           Student[]
   documents          Document[]
   reviewedActivities Activity[]
+  signedCompletions  SiwesCompletion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

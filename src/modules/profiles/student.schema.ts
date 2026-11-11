@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Gender, PlacementStatus, VerificationStatus } from "../../generated/prisma/client.js";
+import { EngagementStatus, Gender, PlacementStatus, VerificationStatus } from "../../generated/prisma/client.js";
 import { email, httpUrl, isoDate, nonEmpty, paging, phone, text } from "./common.schema.js";
 
 const academicSession = z
@@ -64,6 +64,11 @@ export const listStudentsQuery = paging.extend({
   schoolId: z.string().max(64).optional(),
   verificationStatus: z.enum(VerificationStatus).optional(),
   placementStatus: z.enum(PlacementStatus).optional(),
+  // Cohort filters for the school monitoring table.
+  engagementStatus: z.enum(EngagementStatus).optional(),
+  faculty: z.string().trim().max(120).optional(),
+  department: z.string().trim().max(120).optional(),
+  companyId: z.string().max(64).optional(),
   search: z.string().trim().max(100).optional(),
 });
 

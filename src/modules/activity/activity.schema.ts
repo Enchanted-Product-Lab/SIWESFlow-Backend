@@ -17,7 +17,7 @@ const base = {
   description: text(4000),
   whatILearned: optionalText(4000).optional(),
   skillsUsed: stringList(20).optional(),
-  // One calendar day cannot hold more hours than a day has. TRD §5.3 gates
+  // One calendar day cannot hold more hours than a day has. Gates
   // completion on total hours, so this ceiling is what keeps that honest.
   hoursWorked: z.coerce.number().min(0.25).max(24),
   challenges: optionalText(2000).optional(),
