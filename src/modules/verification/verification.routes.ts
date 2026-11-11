@@ -26,6 +26,10 @@ verificationRouter.post("/", async (req, res) => {
   res.status(201).json(await submitForVerification(currentUser(req).id, body));
 });
 
+verificationRouter.get("/", async (req, res) => {
+  res.json(await listQueue(currentUser(req).id, queueQuery.parse(req.query)));
+});
+
 verificationRouter.get("/queue", async (req, res) => {
   res.json(await listQueue(currentUser(req).id, queueQuery.parse(req.query)));
 });
