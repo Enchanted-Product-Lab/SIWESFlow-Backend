@@ -273,6 +273,7 @@ async function main() {
   await step("an approved entry cannot be reviewed again", async () => {
     const res = await call("POST", `/api/activities/${activityId}/review`, tokens.supervisor, {
       status: "NEEDS_REVISION",
+      comment: "Second opinion",
     });
     expect(res.status, 409, "double review");
   });

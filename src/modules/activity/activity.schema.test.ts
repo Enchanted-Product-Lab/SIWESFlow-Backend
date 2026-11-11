@@ -87,6 +87,16 @@ test("a review needs a comment unless it approves the entry", () => {
   assert.ok(reviewActivitySchema.safeParse({ status: "NEEDS_REVISION", comment: "Add detail" }).success);
   assert.equal(reviewActivitySchema.safeParse({ status: "NEEDS_REVISION" }).success, false);
   assert.equal(reviewActivitySchema.safeParse({ status: "NEEDS_REVISION", comment: "   " }).success, false);
+  assert.ok(reviewActivitySchema.safeParse({ status: "REJECTED", comment: "Not your work" }).success);
+  assert.equal(reviewActivitySchema.safeParse({ status: "REJECTED" }).success, false);
+  assert.equal(reviewActivitySchema.safeParse({ status: "PENDING", comment: "x" }).success, false);
+});
+
+test("the flagged filter reads the strings true and false, nothing else", () => {
+  assert.equal(listActivitiesQuery.parse({ flagged: "true" }).flagged, true);
+  assert.equal(listActivitiesQuery.parse({ flagged: "false" }).flagged, false);
+  assert.equal(listActivitiesQuery.parse({}).flagged, undefined);
+  assert.equal(listActivitiesQuery.safeParse({ flagged: "yes" }).success, false);
 });
 
 test("list query defaults paging", () => {

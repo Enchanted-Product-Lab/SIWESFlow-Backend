@@ -46,6 +46,7 @@ model User {
   uploadedDocuments     Document[]     @relation("DocumentUploadedBy")
   reviewedVerifications Verification[] @relation("VerificationReviewedBy")
   verificationEvents    VerificationEvent[] @relation("VerificationEventActor")
+  activityEvents        ActivityEvent[]     @relation("ActivityEventActor")
   companyOwned          Company?       @relation("CompanyOwner")
   approvedPlacements    Placement[]    @relation("PlacementApprovedBy")
 

@@ -35,10 +35,42 @@ model Activity {
   // updatedAt moves on any edit, so neither answers "when was this submitted".
   submittedAt DateTime?
 
+  // Set when the entry arrived in a burst of submissions (TRD §9.5). A flag for
+  // the reviewer, never a block: catching up on a week's entries is legitimate.
+  bulkFlaggedAt DateTime?
+
+  events ActivityEvent[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([studentId])
   @@index([status])
   @@index([date])
+}
+// Append-only history of an entry: every submission, edit and review, so a
+// later review or edit never erases what came before it.
+model ActivityEvent {
+  id String @id @default(cuid())
+
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  // null on the event that created the entry.
+  fromStatus ActivityStatus?
+  toStatus   ActivityStatus
+
+  // Fields a student edit wrote; empty for creation and reviews.
+  changedFields String[]
+
+  // The review's own comment and rating; the Activity row keeps only the latest.
+  note   String?
+  rating Int?
+
+  actorId String?
+  actor   User?   @relation("ActivityEventActor", fields: [actorId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([activityId])
 }

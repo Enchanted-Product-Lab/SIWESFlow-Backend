@@ -1,4 +1,5 @@
 import type { Prisma } from "../../generated/prisma/client.js";
+import { env } from "../../config/env.js";
 import { prisma } from "../../lib/prisma.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/http-error.js";
 import { skipTake, type Page } from "../../lib/pagination.js";
@@ -104,33 +105,55 @@ async function assertEvidence(documentId: string | null | undefined, studentId: 
   }
 }
 
+const HOUR = 60 * 60 * 1000;
+
 export async function createActivity(userId: string, input: CreateActivityInput) {
-  const actor = await loadActor(userId);
-  if (!actor.studentId) throw forbidden("Create your student profile before logging activities");
+  const { studentId } = await loadActor(userId);
+  if (!studentId) throw forbidden("Create your student profile before logging activities");
 
-  await assertDateAllowed(input.date, await siwesWindowOf(actor.studentId));
-  await assertEvidence(input.documentId, actor.studentId);
+  await assertDateAllowed(input.date, await siwesWindowOf(studentId));
+  await assertEvidence(input.documentId, studentId);
 
-  return prisma.activity.create({
-    data: {
-      ...stripUndefined({
-        title: input.title,
-        description: input.description,
-        whatILearned: input.whatILearned,
-        challenges: input.challenges,
-        category: input.category,
-        documentId: input.documentId,
-      }),
-      date: input.date,
-      hoursWorked: input.hoursWorked,
-      skillsUsed: input.skillsUsed ?? [],
-      // Prisma's create input rejects mixing scalar `documentId` with a
-      // `student: { connect }`, so both are scalars here.
-      studentId: actor.studentId,
-      // No draft state exists, so creating an entry is submitting it.
-      status: "PENDING",
-      submittedAt: new Date(),
-    },
+  const now = new Date();
+  return prisma.$transaction(async (tx) => {
+    const burst = {
+      studentId,
+      createdAt: { gte: new Date(now.getTime() - env.ACTIVITY_BULK_WINDOW_HOURS * HOUR) },
+    };
+    const bulk = (await tx.activity.count({ where: burst })) + 1 >= env.ACTIVITY_BULK_THRESHOLD;
+    if (bulk) {
+      await tx.activity.updateMany({
+        where: { ...burst, bulkFlaggedAt: null },
+        data: { bulkFlaggedAt: now },
+      });
+    }
+
+    const activity = await tx.activity.create({
+      data: {
+        ...stripUndefined({
+          title: input.title,
+          description: input.description,
+          whatILearned: input.whatILearned,
+          challenges: input.challenges,
+          category: input.category,
+          documentId: input.documentId,
+        }),
+        date: input.date,
+        hoursWorked: input.hoursWorked,
+        skillsUsed: input.skillsUsed ?? [],
+        // Prisma's create input rejects mixing scalar `documentId` with a
+        // `student: { connect }`, so both are scalars here.
+        studentId,
+        // No draft state exists, so creating an entry is submitting it.
+        status: "PENDING",
+        submittedAt: now,
+        ...(bulk ? { bulkFlaggedAt: now } : {}),
+      },
+    });
+    await tx.activityEvent.create({
+      data: { activityId: activity.id, fromStatus: null, toStatus: "PENDING", actorId: userId },
+    });
+    return activity;
   });
 }
 
@@ -165,6 +188,7 @@ export async function getActivity(userId: string, activityId: string) {
     createdAt: activity.createdAt,
     updatedAt: activity.updatedAt,
     submittedAt: activity.submittedAt,
+    bulkFlaggedAt: activity.bulkFlaggedAt,
     student: activity.student,
     // Sprint 2's review endpoints write these. A resubmitted entry awaits review
     // again, so the old verdict is hidden but kept: supervisor deletion counts on it.
@@ -225,6 +249,7 @@ export async function listActivities(
         status: q.status,
         category: q.category,
       }),
+      q.flagged === undefined ? {} : { bulkFlaggedAt: q.flagged ? { not: null } : null },
       // Both ends are whole days, so `?to=2026-06-30` still covers the 30th.
       q.from || q.to
         ? {
@@ -271,33 +296,43 @@ export async function updateActivity(
 
   // Editing an entry that was sent back counts as resubmitting it.
   const resubmitted = activity.status === "NEEDS_REVISION";
+  const to = resubmitted ? ("PENDING" as const) : activity.status;
 
-  // The status guard stops this overwriting a review written since the read.
-  const { count } = await prisma.activity.updateMany({
-    where: { id: activityId, status: activity.status },
-    data: {
-      ...stripUndefined({
-        title: input.title,
-        description: input.description,
-        whatILearned: input.whatILearned,
-        challenges: input.challenges,
-        category: input.category,
-        documentId: input.documentId,
-        skillsUsed: input.skillsUsed,
-      }),
-      ...(input.date ? { date: input.date } : {}),
-      ...(input.hoursWorked !== undefined ? { hoursWorked: input.hoursWorked } : {}),
-      ...(resubmitted ? { status: "PENDING" as const, submittedAt: new Date() } : {}),
-    },
+  return prisma.$transaction(async (tx) => {
+    // The status guard stops this overwriting a review written since the read.
+    const { count } = await tx.activity.updateMany({
+      where: { id: activityId, status: activity.status },
+      data: {
+        ...stripUndefined({
+          title: input.title,
+          description: input.description,
+          whatILearned: input.whatILearned,
+          challenges: input.challenges,
+          category: input.category,
+          documentId: input.documentId,
+          skillsUsed: input.skillsUsed,
+        }),
+        ...(input.date ? { date: input.date } : {}),
+        ...(input.hoursWorked !== undefined ? { hoursWorked: input.hoursWorked } : {}),
+        ...(resubmitted ? { status: "PENDING" as const, submittedAt: new Date() } : {}),
+      },
+    });
+
+    if (count === 0) {
+      throw conflict("That entry changed since you opened it, reload it and edit again");
+    }
+
+    await tx.activityEvent.create({
+      data: {
+        activityId,
+        fromStatus: activity.status,
+        toStatus: to,
+        changedFields: Object.keys(input),
+        actorId: userId,
+      },
+    });
+    return tx.activity.findUniqueOrThrow({ where: { id: activityId } });
   });
-
-  if (count === 0) {
-    throw conflict("That entry changed since you opened it, reload it and edit again");
-  }
-
-  const updated = await prisma.activity.findUnique({ where: { id: activityId } });
-  if (!updated) throw notFound("Activity not found");
-  return updated;
 }
 
 export async function deleteActivity(userId: string, activityId: string) {
@@ -324,25 +359,56 @@ export async function reviewActivity(
     throw conflict(`A ${activity.status.toLowerCase()} activity cannot be reviewed again`);
   }
 
-  // reviewedById points at the Supervisor row, not the User row.
-  const { count } = await prisma.activity.updateMany({
-    where: { id: activityId, status: activity.status },
-    data: {
-      status: input.status,
-      reviewedById: actor.supervisorId,
-      reviewedAt: new Date(),
-      // Always written: left out, this review would show the previous one's.
-      comment: input.comment || null,
-      rating: input.rating ?? null,
-    },
-  });
-  if (count === 0) throw conflict("This entry was already reviewed");
+  return prisma.$transaction(async (tx) => {
+    // reviewedById points at the Supervisor row, not the User row.
+    const { count } = await tx.activity.updateMany({
+      where: { id: activityId, status: activity.status },
+      data: {
+        status: input.status,
+        reviewedById: actor.supervisorId,
+        reviewedAt: new Date(),
+        // Always written: left out, this review would show the previous one's.
+        comment: input.comment || null,
+        rating: input.rating ?? null,
+      },
+    });
+    if (count === 0) throw conflict("This entry was already reviewed");
 
-  return prisma.activity.findUniqueOrThrow({
-    where: { id: activityId },
-    include: {
-      student: { select: STUDENT_SUMMARY },
-      reviewedBy: { select: { id: true, fullName: true } },
+    await tx.activityEvent.create({
+      data: {
+        activityId,
+        fromStatus: activity.status,
+        toStatus: input.status,
+        note: input.comment || null,
+        rating: input.rating ?? null,
+        actorId: userId,
+      },
+    });
+    return tx.activity.findUniqueOrThrow({
+      where: { id: activityId },
+      include: {
+        student: { select: STUDENT_SUMMARY },
+        reviewedBy: { select: { id: true, fullName: true } },
+      },
+    });
+  });
+}
+
+// Oldest first, so it reads as the entry's story.
+export async function getActivityHistory(userId: string, activityId: string) {
+  await requireEntryAccess(userId, activityId);
+  return prisma.activityEvent.findMany({
+    where: { activityId },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      fromStatus: true,
+      toStatus: true,
+      changedFields: true,
+      note: true,
+      rating: true,
+      createdAt: true,
+      actor: { select: { id: true, role: true } },
     },
   });
 }

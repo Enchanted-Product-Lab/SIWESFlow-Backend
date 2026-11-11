@@ -37,6 +37,8 @@ export const listActivitiesQuery = paging
     category: z.string().trim().max(80).optional(),
     from: isoDate.optional(),
     to: isoDate.optional(),
+    // z.coerce.boolean() would read "false" as true.
+    flagged: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
   })
   .refine((q) => !q.from || !q.to || q.from <= q.to, {
     message: "to must be on or after from",
@@ -49,7 +51,8 @@ export type ListActivitiesQuery = z.infer<typeof listActivitiesQuery>;
 
 export const reviewActivitySchema = z
   .object({
-    status: z.enum(["APPROVED", "NEEDS_REVISION"]),
+    // NEEDS_REVISION sends it back for correction; REJECTED locks it for good.
+    status: z.enum(["APPROVED", "NEEDS_REVISION", "REJECTED"]),
     rating: z.coerce.number().int().min(1).max(5).optional(),
     comment: optionalText(1000).optional(),
   })

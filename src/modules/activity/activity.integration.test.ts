@@ -13,6 +13,7 @@ describe("logbook activity API", { skip: !run }, () => {
   let base = "";
   let server: Server;
   let prisma: typeof import("../../lib/prisma.js").prisma;
+  let env: typeof import("../../config/env.js").env;
   const ids: Record<string, string> = {};
 
   // Prisma's typed inputs reject `string | undefined`, so fixtures are read
@@ -85,6 +86,7 @@ describe("logbook activity API", { skip: !run }, () => {
     process.env.SUPABASE_URL ??= "http://localhost:1";
     process.env.SUPABASE_SERVICE_ROLE_KEY ??= "test";
     ({ prisma } = await import("../../lib/prisma.js"));
+    ({ env } = await import("../../config/env.js"));
     const { setTokenVerifier } = await import("../../lib/token.js");
     setTokenVerifier(async (token) => ({ userId: token }));
     const { default: app } = await import("../../app.js");
@@ -97,6 +99,10 @@ describe("logbook activity API", { skip: !run }, () => {
     await mkUser("sup", "SUPERVISOR");
     await mkUser("supOther", "SUPERVISOR");
     await mkUser("admin", "PLATFORM_ADMIN");
+    await mkUser("stuBulk", "STUDENT");
+    // No student profile: these requests are meant to fail validation, and only
+    // the rate limiter's count matters.
+    await mkUser("stuSpam", "STUDENT");
 
     const schoolOne = await prisma.school.create({
       data: {
@@ -136,6 +142,7 @@ describe("logbook activity API", { skip: !run }, () => {
 
     await mkStudent("studentA", "stuA", schoolOne.id, supervisor.id);
     await mkStudent("studentB", "stuB", schoolTwo.id);
+    await mkStudent("studentBulk", "stuBulk", schoolOne.id, supervisor.id);
   });
 
   after(async () => {
@@ -365,7 +372,7 @@ describe("logbook activity API", { skip: !run }, () => {
     assert.equal((await call("supOther", "POST", url, verdict)).status, 404);
     assert.equal((await call("sup", "POST", "/api/activities/missing/review", verdict)).status, 404);
 
-    assert.equal((await call("sup", "POST", url, { ...verdict, status: "REJECTED" })).status, 400);
+    assert.equal((await call("sup", "POST", url, { status: "REJECTED" })).status, 400);
     assert.equal((await call("sup", "POST", url, { ...verdict, status: "approved" })).status, 400);
     assert.equal((await call("sup", "POST", url, { ...verdict, rating: 0 })).status, 400);
     assert.equal((await call("sup", "POST", url, { ...verdict, rating: 6 })).status, 400);
@@ -439,5 +446,99 @@ describe("logbook activity API", { skip: !run }, () => {
     const other = await call("supOther", "GET", "/api/activities");
     assert.equal(other.status, 200);
     assert.equal(other.body.total, 0);
+  });
+
+  test("a rejected entry is locked for the student and the supervisor", async () => {
+    const { id: entryId } = await mkEntry("studentA", "To reject");
+    const rejected = await call("sup", "POST", `/api/activities/${entryId}/review`, {
+      status: "REJECTED",
+      comment: "This describes another intern's week",
+    });
+    assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+    assert.equal(rejected.body.status, "REJECTED");
+
+    assert.equal((await call("stuA", "PATCH", `/api/activities/${entryId}`, { title: "x" })).status, 409);
+    assert.equal(
+      (await call("sup", "POST", `/api/activities/${entryId}/review`, { status: "APPROVED" })).status,
+      409
+    );
+    const read = await call("stuA", "GET", `/api/activities/${entryId}`);
+    assert.equal(read.body.review.status, "REJECTED");
+    assert.equal(read.body.review.comment, "This describes another intern's week");
+  });
+
+  test("history records every submission, edit and review, oldest first", async () => {
+    const created = await call("stuA", "POST", "/api/activities", { ...entry, date: "2026-07-01" });
+    assert.equal(created.status, 201);
+    const url = `/api/activities/${created.body.id}`;
+
+    await call("stuA", "PATCH", url, { title: "First edit", hoursWorked: 5 });
+    await call("sup", "POST", `${url}/review`, { status: "NEEDS_REVISION", rating: 2, comment: "Say what you built" });
+    await call("stuA", "PATCH", url, { description: "Built the slot counter." });
+    await call("sup", "POST", `${url}/review`, { status: "APPROVED", rating: 4 });
+
+    const history = await call("stuA", "GET", `${url}/history`);
+    assert.equal(history.status, 200);
+    assert.deepEqual(
+      history.body.map((e: Record<string, unknown>) => [e.fromStatus, e.toStatus, e.changedFields, e.note, e.rating]),
+      [
+        [null, "PENDING", [], null, null],
+        ["PENDING", "PENDING", ["title", "hoursWorked"], null, null],
+        ["PENDING", "NEEDS_REVISION", [], "Say what you built", 2],
+        ["NEEDS_REVISION", "PENDING", ["description"], null, null],
+        ["PENDING", "APPROVED", [], null, 4],
+      ]
+    );
+    // The first review's comment survives on the history, although the entry
+    // itself now shows only the latest verdict.
+    assert.equal((await call("stuA", "GET", url)).body.review.comment, null);
+    assert.deepEqual(
+      history.body.map((e: { actor: { id: string } }) => e.actor.id),
+      [id("stuA"), id("stuA"), id("sup"), id("stuA"), id("sup")]
+    );
+
+    // Same visibility as the entry itself.
+    assert.equal((await call("sup", "GET", `${url}/history`)).status, 200);
+    assert.equal((await call("coord", "GET", `${url}/history`)).status, 200);
+    assert.equal((await call("stuB", "GET", `${url}/history`)).status, 404);
+    assert.equal((await call(null, "GET", `${url}/history`)).status, 401);
+  });
+
+  test("a burst of submissions flags every entry in it, not just the last", async () => {
+    const threshold = env.ACTIVITY_BULK_THRESHOLD;
+    const burst: string[] = [];
+    const post = async (n: number) => {
+      const res = await call("stuBulk", "POST", "/api/activities", {
+        ...entry,
+        date: `2026-06-${String(n + 1).padStart(2, "0")}`,
+      });
+      assert.equal(res.status, 201, JSON.stringify(res.body));
+      burst.push(res.body.id);
+      return res.body;
+    };
+
+    for (let n = 0; n < threshold - 1; n++) assert.equal((await post(n)).bulkFlaggedAt, null);
+    assert.ok((await post(threshold - 1)).bulkFlaggedAt, "the entry that crosses the line is flagged");
+
+    const flagged = await call("sup", "GET", `/api/activities?studentId=${id("studentBulk")}&flagged=true&pageSize=100`);
+    assert.deepEqual(
+      flagged.body.data.map((a: { id: string }) => a.id).sort(),
+      [...burst].sort()
+    );
+    assert.ok((await call("sup", "GET", `/api/activities/${burst[0]}`)).body.bulkFlaggedAt);
+
+    // A student below the threshold is untouched.
+    const calm = await call("admin", "GET", `/api/activities?studentId=${id("studentB")}&flagged=true`);
+    assert.equal(calm.body.total, 0);
+  });
+
+  test("logbook writes are rate limited per account", async () => {
+    let last = 0;
+    for (let n = 0; n < 61; n++) last = (await call("stuSpam", "POST", "/api/activities", {})).status;
+    assert.equal(last, 429);
+    // Another student behind the same address is not affected.
+    assert.equal((await call("stuB", "POST", "/api/activities", {})).status, 400);
+    // Reads are not limited.
+    assert.equal((await call("stuSpam", "GET", "/api/activities")).status, 403);
   });
 });
