@@ -11,7 +11,7 @@
     "backup:check": "tsx src/scripts/backup-check.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "test:coverage": "tsx --test --experimental-test-coverage \"src/**/*.test.ts\"",
-    "test:db": "RUN_DB_TESTS=1 tsx --test \"src/**/*.test.ts\""
+    "test:db": "tsx scripts/guard-test-db.ts && RUN_DB_TESTS=1 tsx --test \"src/**/*.test.ts\""
   },
   "keywords": [],
   "author": "",

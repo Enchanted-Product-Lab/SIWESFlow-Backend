@@ -49,6 +49,24 @@ async function main() {
     console.log(`database "${DATABASE}" already present`);
   }
 
+  // Ensure Supabase compatibility roles exist so RLS migrations succeed locally
+  try {
+    const { Client } = await import("pg");
+    const client = new Client({
+      connectionString: `postgresql://postgres:postgres@127.0.0.1:${PORT}/${DATABASE}`,
+    });
+    await client.connect();
+    await client.query(`
+      DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+      DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+      DO $$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    `);
+    await client.end();
+    console.log("dev-db: Supabase compatibility roles (anon, authenticated, service_role) ensured");
+  } catch (err) {
+    console.warn("dev-db: could not provision Supabase roles:", err);
+  }
+
   console.log(
     `DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:${PORT}/${DATABASE}?schema=public"`,
   );
