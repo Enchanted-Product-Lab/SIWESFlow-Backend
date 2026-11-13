@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import {
-  enqueueVerificationEmail,
-  dequeueVerificationEmail,
-  drainVerificationQueue,
-  type VerificationJob,
-} from "./queue.service.js";
+import { before, test } from "node:test";
+import type { VerificationJob } from "./queue.service.js";
+
+// Hermetic unit test: never touches the live Upstash instance or a real
+// email provider. dotenv in config/env.ts does not override variables that
+// are already set, so this wins over backend/.env here and in CI.
+let svc: typeof import("./queue.service.js");
+
+before(async () => {
+  process.env.UPSTASH_REDIS_REST_URL = "";
+  process.env.UPSTASH_REDIS_REST_TOKEN = "";
+  process.env.NODE_ENV = "development";
+  svc = await import("./queue.service.js");
+});
 
 test("queue service handles enqueue, dequeue, and drain", async () => {
+  const { enqueueVerificationEmail, dequeueVerificationEmail, drainVerificationQueue } = svc;
+
   const job: VerificationJob = {
     userId: "user-test-queue-1",
     email: "queue@test.dev",
