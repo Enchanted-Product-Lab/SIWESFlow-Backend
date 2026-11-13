@@ -49,3 +49,18 @@ export const loginEmailLimiter = rateLimit({
   keyGenerator: (req) => emailFromBody(req, "login"),
   message: { error: "Too many requests, please try again later" },
 });
+
+/* Logbook writes, counted per account rather than per IP:
+a campus or office NAT puts a whole cohort behind one address.
+Runs after requireAuth. */
+export const activityWriteLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES,
+  limit: 60,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req) => `activity:${req.user?.id}`,
+  message: { error: "Too many requests, please try again later" },
+});
+
+// Public certificate check, per IP since there is no account to key on.
+export const certificateLookupLimiter = createLimiter(30);

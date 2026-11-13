@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { currentUser, requireAuth, requireRole } from "../../middlewares/auth.js";
+import { activityWriteLimiter } from "../../middlewares/rate-limiters.js";
 import { idParam } from "../profiles/common.schema.js";
 import {
   createActivitySchema,
@@ -11,6 +12,7 @@ import {
   createActivity,
   deleteActivity,
   getActivity,
+  getActivityHistory,
   listActivities,
   updateActivity,
   reviewActivity,
@@ -19,7 +21,7 @@ import {
 export const activityRouter = Router();
 activityRouter.use(requireAuth);
 
-activityRouter.post("/", requireRole("STUDENT"), async (req, res) => {
+activityRouter.post("/", requireRole("STUDENT"), activityWriteLimiter, async (req, res) => {
   const body = createActivitySchema.parse(req.body);
   res.status(201).json(await createActivity(currentUser(req).id, body));
 });
@@ -34,7 +36,13 @@ activityRouter.get("/:id", async (req, res) => {
   res.json(await getActivity(currentUser(req).id, id));
 });
 
-activityRouter.patch("/:id", requireRole("STUDENT"), async (req, res) => {
+// Every submission, edit and review of the entry, oldest first.
+activityRouter.get("/:id/history", async (req, res) => {
+  const { id } = idParam.parse(req.params);
+  res.json(await getActivityHistory(currentUser(req).id, id));
+});
+
+activityRouter.patch("/:id", requireRole("STUDENT"), activityWriteLimiter, async (req, res) => {
   const { id } = idParam.parse(req.params);
   const body = updateActivitySchema.parse(req.body);
   res.json(await updateActivity(currentUser(req).id, id, body));

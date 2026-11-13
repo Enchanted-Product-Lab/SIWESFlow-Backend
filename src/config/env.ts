@@ -19,6 +19,13 @@ const envSchema = z.object({
     .url()
     .default("http://localhost:3000")
     .transform((value) => new URL(value).origin),
+
+  ACTIVITY_BULK_THRESHOLD: z.coerce.number().int().min(2).default(8),
+  ACTIVITY_BULK_WINDOW_HOURS: z.coerce.number().positive().default(24),
+
+  // SIWES completion minimums.
+  COMPLETION_MIN_HOURS: z.coerce.number().positive().default(480),
+  COMPLETION_MIN_WEEKS: z.coerce.number().int().positive().default(12),
 });
 
 export const env = envSchema.parse(process.env);

@@ -6,9 +6,12 @@
 
 import "dotenv/config";
 import app from "./app.js";
+import { scheduleEngagementRefresh } from "./modules/engagement/engagement.service.js";
 
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
   console.log(`SIWESFlow API listening on port ${PORT}`);
 });
+
+scheduleEngagementRefresh();

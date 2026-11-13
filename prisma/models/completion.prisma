@@ -1,0 +1,43 @@
+// Student requests -> host supervisor signs off -> school verifies.
+enum CompletionStatus {
+  PENDING_SUPERVISOR
+  PENDING_SCHOOL
+  VERIFIED
+  DECLINED
+}
+
+// One per student. A declined request is re-requested on the same row.
+model SiwesCompletion {
+  id String @id @default(cuid())
+
+  studentId String  @unique
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  status CompletionStatus @default(PENDING_SUPERVISOR)
+
+  // What the requirement check saw when the student asked, so the certificate
+  // states the numbers it was issued on.
+  totalHours      Float
+  approvedEntries Int
+  weeksLogged     Int
+  requestedAt     DateTime @default(now())
+
+  supervisorId          String?
+  supervisor            Supervisor? @relation(fields: [supervisorId], references: [id])
+  supervisorSignedOffAt DateTime?
+  supervisorRemarks     String?
+
+  verifiedById String?
+  verifiedBy   User?     @relation("CompletionVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt   DateTime?
+
+  declineReason String?
+
+  // Unguessable and unique; the public certificate check looks it up.
+  certificateReference String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}

@@ -70,6 +70,7 @@ model Student {
   documents    Document[]
   activities   Activity[]
   applications Application[]
+  completion   SiwesCompletion?
 
   engagementStatus        EngagementStatus @default(INACTIVE)
   lastActivitySubmittedAt DateTime?

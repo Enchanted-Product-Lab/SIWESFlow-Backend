@@ -1,6 +1,6 @@
 import type { ActivityStatus } from "../../generated/prisma/client.js";
 
-// TRD §5.1 locks an entry once it is approved or rejected, so it is editable only
+// Locks an entry once it is approved or rejected, so it is editable only
 // while awaiting review or sent back for correction.
 export const canEdit = (status: ActivityStatus) =>
   status === "PENDING" || status === "NEEDS_REVISION";
@@ -21,7 +21,7 @@ export const startOfDay = (d: Date): Date =>
 export const endOfDay = (d: Date): Date =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
 
-// TRD §5.1: all of today counts as past.
+// All of today counts as past.
 // shortcut: the bound is the latest day anywhere on earth (UTC+14), so a WAT student
 // logging just after local midnight is not told their own today is the future.
 export function checkNotFuture(date: Date, now: Date): DateProblem {

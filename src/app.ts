@@ -8,6 +8,8 @@ import { schoolRouter } from "./modules/profiles/school.routes.js";
 import { companyRouter } from "./modules/profiles/company.routes.js";
 import { supervisorRouter } from "./modules/profiles/supervisor.routes.js";
 import { activityRouter } from "./modules/activity/activity.routes.js";
+import { monitoringRouter } from "./modules/monitoring/monitoring.routes.js";
+import { completionRouter } from "./modules/completion/completion.routes.js";
 import { placementRouter } from "./modules/placement/placement.routes.js";
 import { billingRouter } from "./modules/billing/billing.routes.js";
 import { verificationRouter } from "./modules/verification/verification.routes.js";
@@ -53,6 +55,9 @@ app.use("/documents", documentRouter);
 app.use("/api/documents", documentRouter);
 
 // Application routes
+// Before the profile routers: their "/:id" would take "/schools/me/..." etc.
+app.use("/api", monitoringRouter);
+app.use("/api/completions", completionRouter);
 app.use("/api/students", studentRouter);
 app.use("/api/student", studentRouter);
 app.use("/students", studentRouter);
