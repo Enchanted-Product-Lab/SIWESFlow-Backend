@@ -8,13 +8,36 @@ import { schoolDashboardMetrics, studentTimeline, supervisorMetrics } from "./mo
 // router sees every /api request on its way past.
 export const monitoringRouter = Router();
 
+const handleSchoolMetrics = async (req: any, res: any) => {
+  res.json(await schoolDashboardMetrics(currentUser(req).id));
+};
+
 monitoringRouter.get(
   "/schools/me/dashboard-metrics",
   requireAuth,
   requireRole("SCHOOL_COORDINATOR"),
-  async (req, res) => {
-    res.json(await schoolDashboardMetrics(currentUser(req).id));
-  }
+  handleSchoolMetrics
+);
+
+monitoringRouter.get(
+  "/school/metrics",
+  requireAuth,
+  requireRole("SCHOOL_COORDINATOR"),
+  handleSchoolMetrics
+);
+
+monitoringRouter.get(
+  "/schools/metrics",
+  requireAuth,
+  requireRole("SCHOOL_COORDINATOR"),
+  handleSchoolMetrics
+);
+
+monitoringRouter.get(
+  "/schools/me/metrics",
+  requireAuth,
+  requireRole("SCHOOL_COORDINATOR"),
+  handleSchoolMetrics
 );
 
 monitoringRouter.get(
