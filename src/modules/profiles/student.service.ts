@@ -52,8 +52,39 @@ export async function createStudentProfile(userId: string, input: CreateStudentI
   }
 }
 
+const studentRelationsInclude = {
+  school: { select: { id: true, name: true, schoolCode: true } },
+  placement: {
+    select: {
+      id: true,
+      title: true,
+      companyId: true,
+      department: true,
+      startDate: true,
+      endDate: true,
+      location: true,
+      workMode: true,
+      approvalStatus: true,
+      company: { select: { id: true, name: true, email: true, phone: true, address: true, industry: true } },
+    },
+  },
+  supervisor: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phone: true,
+      position: true,
+      department: true,
+    },
+  },
+} as const;
+
 export async function getMyStudentProfile(userId: string) {
-  const student = await prisma.student.findUnique({ where: { userId } });
+  const student = await prisma.student.findUnique({
+    where: { userId },
+    include: studentRelationsInclude,
+  });
   if (!student) throw notFound("You have not created a student profile yet");
   return student;
 }
@@ -67,10 +98,7 @@ export async function getStudentProfile(userId: string, studentId: string) {
   }
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    include: {
-      school: { select: { id: true, name: true, schoolCode: true } },
-      placement: { select: { id: true, title: true, companyId: true } },
-    },
+    include: studentRelationsInclude,
   });
   if (!student) throw notFound("Student not found");
   return view(student, relation);
