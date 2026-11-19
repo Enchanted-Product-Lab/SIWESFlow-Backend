@@ -34,6 +34,8 @@ app.use(express.json({ limit: "10kb" }));
 // Authentication routes
 app.use("/api/auth", authRouter);
 app.use("/auth", authRouter);
+app.use("/api/users", authRouter);
+app.use("/users", authRouter);
 
 // Health check
 app.get("/health", async (_req, res) => {
