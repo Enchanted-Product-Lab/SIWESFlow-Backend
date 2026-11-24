@@ -58,5 +58,5 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/siwesflow_test
           RUN_DB_TESTS: "1"
         run: |
-          npx prisma db push --skip-generate
+          npx prisma migrate deploy
           npm run test:db
