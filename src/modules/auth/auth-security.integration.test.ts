@@ -43,7 +43,7 @@ describe("auth password reset and mandatory admin 2FA", { skip: !run }, () => {
     prisma = prismaMod.prisma;
 
     await new Promise<void>((resolve) => {
-      server = appMod.default.listen(0, "127.0.0.1", resolve);
+      server = appMod.default.listen(0, "127.0.0.1", () => resolve());
     });
     const addr = server.address();
     if (!addr || typeof addr === "string") throw new Error("Expected numeric server port");
