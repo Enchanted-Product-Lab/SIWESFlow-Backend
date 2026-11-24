@@ -31,9 +31,12 @@ model User {
 
   isEmailVerified Boolean @default(false)
 
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
 
   //Email verification tokenHash
   emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
 
   // -- Reverse relations: what this user IS --------------------------------
   student           Student?

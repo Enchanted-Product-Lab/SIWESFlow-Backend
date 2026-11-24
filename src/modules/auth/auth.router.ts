@@ -1,5 +1,15 @@
 import { Router } from "express";
-import { login, register, resendVerification, verifyEmail } from "./auth.controller.js";
+import {
+  disable2FA,
+  enable2FA,
+  forgotPassword,
+  login,
+  register,
+  resendVerification,
+  resetPasswordHandler,
+  setup2FA,
+  verifyEmail,
+} from "./auth.controller.js";
 import { requireAuth } from "../../middlewares/auth.js";
 import {
   loginEmailLimiter,
@@ -23,6 +33,12 @@ router.post("/verify-email", verifyEmailLimiter, verifyEmail);
 router.get("/verify-email", verifyEmailLimiter, verifyEmail);
 router.post("/resend-verification", resendIpLimiter, resendEmailLimiter, resendVerification);
 router.post("/login", loginIpLimiter, loginEmailLimiter, login);
+router.post("/forgot-password", resendIpLimiter, resendEmailLimiter, forgotPassword);
+router.post("/reset-password", verifyEmailLimiter, resetPasswordHandler);
+
+router.post("/2fa/setup", requireAuth, setup2FA);
+router.post("/2fa/enable", requireAuth, enable2FA);
+router.post("/2fa/disable", requireAuth, disable2FA);
 
 router.get("/me", requireAuth, (req, res) => {
   res.json({
